@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Child Safety Policy – Down2Chill</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Down2Chill has zero tolerance for child sexual abuse and exploitation. How we detect it, how to report it, what we do next, and where to get help.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="Child Safety Policy – Down2Chill">
+<meta property="og:description" content="Zero tolerance for child sexual abuse and exploitation. How we detect it, how to report it, and what happens next.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://down2chill.com/child-safety.html">
+<meta property="og:site_name" content="Down2Chill">
+<meta property="og:locale" content="en_US">
+<meta name="theme-color" content="#30226f">
+<link rel="canonical" href="https://down2chill.com/child-safety.html">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2330226f'/%3E%3Cg transform='rotate(-42 16 16)' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 20h-2a4 4 0 0 1 0-8h2'/%3E%3Cpath d='M19 12h2a4 4 0 1 1 0 8h-2'/%3E%3Cline x1='12.5' y1='16' x2='19.5' y2='16'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preload" href="assets/fonts/montserrat-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/dm-mono-500.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* ---------- fonts (local, offline) ---------- */
+@font-face { font-family: 'Montserrat'; src: url('assets/fonts/montserrat-var.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DM Mono'; src: url('assets/fonts/dm-mono-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DM Mono'; src: url('assets/fonts/dm-mono-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+
+/* ---------- base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; background: #0a1a3a; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh;
+  font-family: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  color: #fff;
+  background:
+    radial-gradient(ellipse at 50% 30%, #5040C6 0%, rgba(80,64,198,.7) 26%, transparent 70%),
+    radial-gradient(ellipse at 22% 6%, rgba(126,88,239,.4) 0%, transparent 34%),
+    radial-gradient(ellipse at 86% 42%, rgba(43,112,224,.28) 0%, transparent 36%),
+    linear-gradient(150deg, #06142e 0%, #0c2450 40%, #123b79 72%, #0e4d87 100%);
+  background-attachment: fixed; background-size: cover; background-position: center;
+}
+a { color: #dffcff; }
+button, a, input { font: inherit; }
+h1, h2, h3, p, ul, ol { margin: 0; }
+.display { font-weight: 900; letter-spacing: -.06em; }
+.mono { font-family: 'DM Mono', monospace; letter-spacing: .1em; }
+:focus-visible { outline: 2px solid #dffcff; outline-offset: 3px; }
+[id] { scroll-margin-top: 104px; }
+
+/* ---------- nav ---------- */
+.nav {
+  position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top)); z-index: 50;
+  display: flex; width: calc(100% - 28px); max-width: 1080px; transform: translateX(-50%);
+  align-items: center; justify-content: space-between; gap: 12px;
+  border-radius: 999px; border: 1px solid rgba(255,255,255,.15); background: rgba(7,25,58,.62);
+  padding: 11px 14px 11px 16px;
+  backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+.logo { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; flex-shrink: 0; }
+.logo-badge { display: flex; height: 28px; width: 28px; flex-shrink: 0; align-items: center; justify-content: center; }
+.logo-word { display: block; height: 14px; width: auto; }
+.nav-right { display: flex; align-items: center; gap: 6px; }
+.nav-back { display: none; padding: 12px 10px; margin: -12px 0; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: rgba(255,255,255,.8); text-decoration: none; transition: color .15s; }
+.nav-back:hover { color: #fff; }
+.btn-pill { display: inline-block; white-space: nowrap; border-radius: 999px; background: #fff; padding: 11px 18px; font-size: 11px; font-weight: 800; letter-spacing: .08em; color: #25205e; text-decoration: none; transition: transform .15s, background .15s; }
+.btn-pill:hover { transform: translateY(-2px); background: #dffcff; }
+@media (min-width: 560px) { .nav-back { display: inline-block; } .nav-right { gap: 14px; } }
+
+/* ---------- masthead ---------- */
+.masthead { padding: 128px 20px 0; }
+.masthead-inner { margin: 0 auto; max-width: 1080px; }
+.eyebrow { font-size: 10px; font-weight: 500; text-transform: uppercase; color: #dffcff; }
+.masthead h1 { margin-top: 14px; font-size: clamp(38px, 6.4vw, 68px); line-height: .9; }
+.lede { margin-top: 24px; max-width: 60ch; font-size: 16px; line-height: 1.7; color: rgba(255,255,255,.85); }
+.meta-row { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px; }
+.meta-chip { border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07); padding: 8px 14px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .07em; color: rgba(255,255,255,.82); }
+.rule { margin: 44px auto 0; max-width: 1080px; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,.28), rgba(255,255,255,.06) 60%, transparent); }
+
+/* ---------- layout ---------- */
+.shell { margin: 0 auto; max-width: 1120px; padding: 0 20px 96px; display: grid; gap: 40px; align-items: start; }
+@media (min-width: 1024px) { .shell { grid-template-columns: 232px 1fr; gap: 56px; } }
+
+.toc { display: none; }
+@media (min-width: 1024px) {
+  .toc { display: block; position: sticky; top: 104px; padding-top: 44px; }
+  .toc-label { font-size: 9px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.76); }
+  .toc ol { margin: 14px 0 0; padding: 0; list-style: none; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: block; padding: 7px 0 7px 26px; position: relative; font-size: 12.5px; line-height: 1.35; color: rgba(255,255,255,.78); text-decoration: none; transition: color .15s; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); position: absolute; left: 0; top: 8px; font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(255,255,255,.58); }
+  .toc a:hover { color: #fff; }
+  .toc a:hover::before { color: #dffcff; }
+}
+
+/* ---------- prose ---------- */
+.prose { padding-top: 44px; min-width: 0; }
+.sec { padding-top: 40px; }
+.sec:first-child { padding-top: 0; }
+.sec-num { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .12em; color: rgba(255,255,255,.76); }
+.sec h2 { margin-top: 10px; font-size: clamp(22px, 3.4vw, 30px); font-weight: 800; letter-spacing: -.035em; line-height: 1.12; color: #fff; }
+.sec h3 { margin-top: 30px; font-size: 14px; font-weight: 800; letter-spacing: .01em; color: #dffcff; }
+.prose p { margin-top: 16px; font-size: 15.5px; line-height: 1.78; color: rgba(255,255,255,.85); }
+.prose p a, .prose li a { color: #dffcff; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(223,252,255,.45); }
+.prose p a:hover, .prose li a:hover { text-decoration-color: #dffcff; }
+.prose strong { color: #fff; font-weight: 700; }
+.prose ul { margin: 16px 0 0; padding: 0; list-style: none; }
+.prose li { position: relative; padding: 7px 0 7px 24px; font-size: 15.5px; line-height: 1.7; color: rgba(255,255,255,.85); }
+.prose li::before { content: ""; position: absolute; left: 2px; top: 18px; width: 6px; height: 6px; border-radius: 999px; background: rgba(223,252,255,.75); }
+.prose ul.banned li::before { content: "\2715"; top: 7px; left: 0; width: auto; height: auto; border-radius: 0; background: none; font-family: 'DM Mono', monospace; font-size: 13px; color: #ffadcf; }
+
+/* callouts */
+.callout { margin-top: 26px; border-radius: 20px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); padding: 22px 24px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.callout-title { display: flex; align-items: center; gap: 9px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #dffcff; }
+.callout-title svg { flex-shrink: 0; }
+.callout p:first-of-type { margin-top: 12px; }
+.callout ul { margin-top: 12px; }
+.callout-key { border-color: rgba(223,252,255,.4); background: linear-gradient(135deg, rgba(117,100,233,.34) 0%, rgba(59,88,184,.24) 100%); }
+
+/* the report block gets its own weight — it is the reason most people open this page */
+.report { margin-top: 30px; border-radius: 24px; border: 1px solid rgba(255,173,207,.45); background: linear-gradient(140deg, rgba(120,44,86,.42) 0%, rgba(54,40,120,.4) 100%); padding: 26px 26px 28px; }
+.report .callout-title { color: #ffd0e2; }
+.report h3 { margin-top: 14px; font-size: 21px; font-weight: 800; letter-spacing: -.02em; color: #fff; }
+.report p { color: rgba(255,255,255,.88); }
+.report-actions { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; }
+.report-btn { display: inline-flex; align-items: center; gap: 9px; border-radius: 999px; padding: 14px 22px; font-size: 12px; font-weight: 800; letter-spacing: .07em; text-decoration: none; transition: transform .2s ease, background .2s ease; }
+.report-btn-primary { background: #fff; color: #4a1b34; }
+.report-btn-primary:hover { transform: translateY(-2px); background: #ffe9f1; }
+.report-btn-ghost { border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.08); color: #fff; }
+.report-btn-ghost:hover { transform: translateY(-2px); background: rgba(255,255,255,.16); }
+
+/* facts grid */
+.facts { margin-top: 22px; display: grid; gap: 10px; }
+@media (min-width: 560px) { .facts { grid-template-columns: 1fr 1fr; } }
+.fact { border-radius: 16px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); padding: 16px 18px; }
+.fact dt { font-family: 'DM Mono', monospace; font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.8); }
+.fact dd { margin: 7px 0 0; font-size: 14.5px; font-weight: 700; color: #fff; word-break: break-word; }
+.fact dd a { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(223,252,255,.45); }
+
+/* ---------- footer ---------- */
+.footer { border-top: 1px solid rgba(255,255,255,.1); padding: 32px 20px calc(32px + env(safe-area-inset-bottom)); }
+.footer-inner { margin: 0 auto; display: flex; max-width: 1080px; flex-direction: column; align-items: center; justify-content: space-between; gap: 22px; }
+.footer-links { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 20px; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+.footer-links a { padding: 15px 4px; margin: -15px 0; color: rgba(255,255,255,.74); text-decoration: none; transition: color .15s; }
+.footer-links a:hover { color: #fff; }
+.footer-copy { font-size: 10px; color: rgba(255,255,255,.74); text-align: center; }
+@media (min-width: 640px) { .footer-inner { flex-direction: row; flex-wrap: wrap; gap: 20px 24px; } .footer-copy { flex: 1 0 100%; order: 5; } }
+@media (min-width: 640px) { .masthead { padding-top: 152px; } .lede { font-size: 17px; } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <a href="index.html" class="logo" aria-label="Down2Chill home">
+    <span class="logo-badge"><img src="assets/couch.svg" width="28" height="14" alt=""></span>
+    <img class="logo-word" src="assets/down2chill_light.svg" alt="DOWN2CHILL" width="130" height="14">
+  </a>
+  <div class="nav-right">
+    <a class="nav-back" href="index.html">&larr; Back to site</a>
+    <a class="btn-pill" href="https://apps.apple.com/us/app/down2chill/id6444803295" target="_blank" rel="noreferrer">Get the App.</a>
+  </div>
+</header>
+
+<main>
+  <div class="masthead">
+    <div class="masthead-inner">
+      <span class="mono eyebrow">Legal / Child Safety</span>
+      <h1 class="display">CHILD SAFETY<br>POLICY.</h1>
+      <p class="lede">Down2Chill has zero tolerance for child sexual abuse and exploitation. This page sets out what is forbidden, how we detect it, how you report it to us, and exactly what happens after you do. If you are here because something is wrong right now, jump straight to <a href="#report">how to report</a>.</p>
+      <div class="meta-row">
+        <span class="meta-chip">EFFECTIVE 27 AUG 2026</span>
+        <span class="meta-chip">D2C HOLDINGS LLC</span>
+        <span class="meta-chip">ZERO TOLERANCE</span>
+      </div>
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  <div class="shell">
+    <nav class="toc" aria-label="On this page">
+      <span class="toc-label">On this page</span>
+      <ol>
+        <li><a href="#commitment">Our commitment</a></li>
+        <li><a href="#age">Who can use Down2Chill</a></li>
+        <li><a href="#prohibited">What is prohibited</a></li>
+        <li><a href="#detection">How we detect it</a></li>
+        <li><a href="#report">How to report</a></li>
+        <li><a href="#response">What happens next</a></li>
+        <li><a href="#authorities">Working with authorities</a></li>
+        <li><a href="#help">Where to get help</a></li>
+        <li><a href="#contact">Contact &amp; company details</a></li>
+      </ol>
+    </nav>
+
+    <div class="prose">
+
+      <section class="sec" id="commitment">
+        <span class="sec-num">01 / OUR COMMITMENT</span>
+        <h2>Zero tolerance, without exception</h2>
+        <p>Down2Chill, operated by <strong>D2C HOLDINGS LLC</strong>, maintains a zero-tolerance policy for child sexual abuse and exploitation (CSAE), including child sexual abuse material (CSAM). This is not a policy we balance against other priorities. There is no warning, no strike system and no appeal on the merits for confirmed CSAE.</p>
+        <p>We built Down2Chill to get people together in real life. That makes safeguarding the people who use it &mdash; and especially anyone who might be targeted through it &mdash; a condition of the product existing at all. This policy applies everywhere Down2Chill operates, to every user, in every country.</p>
+      </section>
+
+      <section class="sec" id="age">
+        <span class="sec-num">02 / WHO CAN USE DOWN2CHILL</span>
+        <h2>Minimum age</h2>
+        <p><strong>You must be at least 13 years old to create a Down2Chill account</strong>, and older where your country sets a higher age for consenting to online services. We ask for a date of birth at sign-up to enforce this.</p>
+        <p>We do not knowingly permit accounts belonging to children under 13. Where we identify one &mdash; through a report, a moderation review, or our own checks &mdash; we remove it and delete the associated data. If you are a parent or guardian and believe your child has an account, email <a href="mailto:team@down2chill.com">team@down2chill.com</a> and we will act on it.</p>
+      </section>
+
+      <section class="sec" id="prohibited">
+        <span class="sec-num">03 / WHAT IS PROHIBITED</span>
+        <h2>Conduct that will end your account</h2>
+        <p>The following are strictly forbidden on Down2Chill. Each results in immediate and permanent removal, and each is reported to the authorities where the law requires or good judgement demands it:</p>
+        <ul class="banned">
+          <li>Sharing, uploading, requesting, linking to or storing child sexual abuse material, in any form, real or computer-generated.</li>
+          <li>Sexualising a minor in any content, conversation, profile, username or group name.</li>
+          <li>Grooming &mdash; building a relationship with a minor, or with someone you believe to be a minor, in order to sexually exploit them.</li>
+          <li>Sextortion &mdash; threatening to publish intimate imagery to coerce a minor into producing more, into payment, or into meeting.</li>
+          <li>Trafficking, or advertising, arranging or facilitating the sexual exploitation of a minor.</li>
+          <li>Arranging or attempting to arrange an in-person meeting with a minor for a sexual purpose.</li>
+          <li>Using Down2Chill&rsquo;s availability, location or invite features to identify, approach or locate a minor for any of the above.</li>
+        </ul>
+        <p>Attempting any of these is treated exactly the same as completing them.</p>
+      </section>
+
+      <section class="sec" id="detection">
+        <span class="sec-num">04 / HOW WE DETECT IT</span>
+        <h2>Detection and prevention</h2>
+        <ul>
+          <li><strong>Automated image scanning.</strong> Every image uploaded to Down2Chill &mdash; profile photos, stories and images sent in chat &mdash; is automatically scanned using Google Firebase&rsquo;s image moderation technology before it is made available to anyone else.</li>
+          <li><strong>Immediate blocking.</strong> Content identified as violating these standards is blocked and removed from the platform, and the account is flagged for human review.</li>
+          <li><strong>Human review.</strong> Automated systems are a filter, not a judge. Flagged material and every user report reaches a trained reviewer.</li>
+          <li><strong>Ongoing improvement.</strong> We review and update our detection tooling as the technology and the threat both change.</li>
+        </ul>
+        <p>Detection is deliberately layered with reporting, because no automated system catches everything &mdash; particularly grooming and coercion, which look like ordinary conversation to a classifier. That is why the next section matters.</p>
+      </section>
+
+      <section class="sec" id="report">
+        <span class="sec-num">05 / HOW TO REPORT</span>
+        <h2>Reporting something to us</h2>
+        <div class="report">
+          <span class="callout-title"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0"/></svg>Report child sexual abuse or exploitation</span>
+          <h3>You do not need to be sure. Tell us anyway.</h3>
+          <p>If you see content or behaviour on Down2Chill that may involve the sexual abuse or exploitation of a child, report it immediately. Use the in-app reporting option on the profile, message or group in question, or email us directly. Reports are handled confidentially, and you will never be identified to the person you reported.</p>
+          <p><strong>Please do not download, forward or save the material</strong> in order to send it to us as evidence &mdash; doing so may itself be a criminal offence in your country. Send us the username, the approximate time, and a description. We can retrieve the rest.</p>
+          <div class="report-actions">
+            <a class="report-btn report-btn-primary" href="mailto:team@down2chill.com?subject=Child%20safety%20report">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              EMAIL OUR SAFETY TEAM
+            </a>
+            <a class="report-btn report-btn-ghost" href="https://report.cybertip.org/" target="_blank" rel="noreferrer noopener">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h6v6"/><path d="M19 5 5 19"/></svg>
+              NCMEC CYBERTIPLINE
+            </a>
+          </div>
+        </div>
+        <div class="callout">
+          <span class="callout-title"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>If a child is in immediate danger</span>
+          <p>Contact your local emergency services first &mdash; 911 in the United States, 999 in the United Kingdom, 112 across the EU. Report to us afterwards. We would always rather you called the police first and told us second.</p>
+        </div>
+      </section>
+
+      <section class="sec" id="response">
+        <span class="sec-num">06 / WHAT HAPPENS NEXT</span>
+        <h2>Our response and enforcement</h2>
+        <p>When we receive a report, or our automated systems flag material, we act on this sequence:</p>
+        <ul>
+          <li><strong>Remove.</strong> The content is taken down and put beyond reach of other users.</li>
+          <li><strong>Disable.</strong> The account is suspended immediately, and permanently banned once the report is confirmed. We also act against attempts to return under a new account.</li>
+          <li><strong>Preserve.</strong> We retain the material and associated account records securely, in the manner and for the period the law requires, so that investigators can use them.</li>
+          <li><strong>Report.</strong> Apparent child sexual abuse material is reported to the National Center for Missing &amp; Exploited Children (NCMEC) as required by <strong>18 U.S.C. &sect; 2258A</strong>, and to other authorities where local law requires it.</li>
+          <li><strong>Support.</strong> Where a user of Down2Chill has been targeted, we point them to the resources below and cooperate with any investigation they choose to pursue.</li>
+        </ul>
+        <p>Our moderation team is trained to handle these reports confidentially and in line with applicable law. Accounts removed for confirmed CSAE are not reinstated. If you believe your account was disabled in error, you may write to <a href="mailto:team@down2chill.com">team@down2chill.com</a> and we will review the decision &mdash; but we will not restore an account while a report is open with law enforcement.</p>
+      </section>
+
+      <section class="sec" id="authorities">
+        <span class="sec-num">07 / WORKING WITH AUTHORITIES</span>
+        <h2>Cooperation with law enforcement</h2>
+        <p>We respond promptly to lawful requests from law enforcement and child protection agencies investigating CSAE, including preservation requests, and we do not require a subpoena before preserving evidence.</p>
+        <p>We comply with the child safety requirements of the platforms we distribute through, including Google Play&rsquo;s CSAE standards and the Apple App Store Review Guidelines, and with applicable law in the jurisdictions where Down2Chill is available. Our designated point of contact for CSAE matters is listed in section 09.</p>
+      </section>
+
+      <section class="sec" id="help">
+        <span class="sec-num">08 / WHERE TO GET HELP</span>
+        <h2>Support beyond Down2Chill</h2>
+        <p>These organisations help children, young people and families directly. They are independent of us, and you do not need to have reported anything to Down2Chill first.</p>
+        <ul>
+          <li><strong>NCMEC CyberTipline</strong> (United States) &mdash; report exploitation at <a href="https://report.cybertip.org/" target="_blank" rel="noreferrer noopener">report.cybertip.org</a> or call 1-800-843-5678.</li>
+          <li><strong>Take It Down</strong> &mdash; a free NCMEC service that helps remove intimate images of under-18s from participating platforms: <a href="https://takeitdown.ncmec.org/" target="_blank" rel="noreferrer noopener">takeitdown.ncmec.org</a>.</li>
+          <li><strong>Internet Watch Foundation</strong> (United Kingdom and international) &mdash; report imagery anonymously at <a href="https://report.iwf.org.uk/" target="_blank" rel="noreferrer noopener">report.iwf.org.uk</a>.</li>
+          <li><strong>INHOPE</strong> &mdash; find the reporting hotline for your country at <a href="https://www.inhope.org/EN/our-members" target="_blank" rel="noreferrer noopener">inhope.org</a>.</li>
+        </ul>
+      </section>
+
+      <section class="sec" id="contact">
+        <span class="sec-num">09 / CONTACT</span>
+        <h2>Company and point of contact</h2>
+        <dl class="facts">
+          <div class="fact"><dt>App</dt><dd>Down2Chill</dd></div>
+          <div class="fact"><dt>Developer &amp; company</dt><dd>D2C HOLDINGS LLC</dd></div>
+          <div class="fact"><dt>Contact email</dt><dd><a href="mailto:team@down2chill.com">team@down2chill.com</a></dd></div>
+          <div class="fact"><dt>Designated CSAE point of contact</dt><dd><a href="mailto:team@down2chill.com">team@down2chill.com</a></dd></div>
+        </dl>
+        <div class="callout callout-key">
+          <span class="callout-title"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Related</span>
+          <p>How we handle personal information generally, including the data we would preserve in a safety investigation, is set out in our <a href="privacy.html">Privacy Policy</a>.</p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <a href="index.html" class="logo" aria-label="Down2Chill">
+      <span class="logo-badge"><img src="assets/couch.svg" width="28" height="14" alt=""></span>
+      <img class="logo-word" src="assets/down2chill_light.svg" alt="DOWN2CHILL" width="130" height="14">
+    </a>
+    <div class="footer-links">
+      <a href="index.html">HOME</a>
+      <a href="index.html#faq">FAQ</a>
+      <a href="mailto:team@down2chill.com">CONTACT</a>
+      <a href="privacy.html">PRIVACY</a>
+      <a href="child-safety.html" aria-current="page">CHILD SAFETY</a>
+    </div>
+    <a class="btn-pill" href="https://apps.apple.com/us/app/down2chill/id6444803295" target="_blank" rel="noreferrer">Get the App.</a>
+    <span class="mono footer-copy">© <span id="year">2026</span> DOWN2CHILL. ALL RIGHTS RESERVED. / MADE FOR THE IN-BETWEEN</span>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+  if (navigator.userAgent.toLowerCase().indexOf('android') !== -1) {
+    document.querySelectorAll('.btn-pill').forEach(function (a) {
+      a.href = 'https://play.google.com/store/apps/details?id=com.down2chill.v3&pcampaignid=web_share';
+    });
+  }
+</script>
+</body>
+</html>

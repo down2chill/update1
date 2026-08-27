@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Privacy Policy – Down2Chill</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="How Down2Chill collects, uses, shares and protects your personal information — in plain English. We do not sell your data or show third-party ads.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="Privacy Policy – Down2Chill">
+<meta property="og:description" content="What we collect, why, and what you can do about it. We do not sell your personal information.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://down2chill.com/privacy.html">
+<meta property="og:site_name" content="Down2Chill">
+<meta property="og:locale" content="en_US">
+<meta name="theme-color" content="#30226f">
+<link rel="canonical" href="https://down2chill.com/privacy.html">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2330226f'/%3E%3Cg transform='rotate(-42 16 16)' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 20h-2a4 4 0 0 1 0-8h2'/%3E%3Cpath d='M19 12h2a4 4 0 1 1 0 8h-2'/%3E%3Cline x1='12.5' y1='16' x2='19.5' y2='16'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preload" href="assets/fonts/montserrat-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/dm-mono-500.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* ---------- fonts (local, offline) ---------- */
+@font-face { font-family: 'Montserrat'; src: url('assets/fonts/montserrat-var.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DM Mono'; src: url('assets/fonts/dm-mono-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DM Mono'; src: url('assets/fonts/dm-mono-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+
+/* ---------- base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; background: #0a1a3a; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh;
+  font-family: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  color: #fff;
+  background:
+    radial-gradient(ellipse at 50% 30%, #5040C6 0%, rgba(80,64,198,.7) 26%, transparent 70%),
+    radial-gradient(ellipse at 22% 6%, rgba(126,88,239,.4) 0%, transparent 34%),
+    radial-gradient(ellipse at 86% 42%, rgba(43,112,224,.28) 0%, transparent 36%),
+    linear-gradient(150deg, #06142e 0%, #0c2450 40%, #123b79 72%, #0e4d87 100%);
+  background-attachment: fixed; background-size: cover; background-position: center;
+}
+a { color: #dffcff; }
+button, a, input { font: inherit; }
+h1, h2, h3, p, ul, ol { margin: 0; }
+.display { font-weight: 900; letter-spacing: -.06em; }
+.mono { font-family: 'DM Mono', monospace; letter-spacing: .1em; }
+:focus-visible { outline: 2px solid #dffcff; outline-offset: 3px; }
+[id] { scroll-margin-top: 104px; }
+
+/* ---------- nav ---------- */
+.nav {
+  position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top)); z-index: 50;
+  display: flex; width: calc(100% - 28px); max-width: 1080px; transform: translateX(-50%);
+  align-items: center; justify-content: space-between; gap: 12px;
+  border-radius: 999px; border: 1px solid rgba(255,255,255,.15); background: rgba(7,25,58,.62);
+  padding: 11px 14px 11px 16px;
+  backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+.logo { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; flex-shrink: 0; }
+.logo-badge { display: flex; height: 28px; width: 28px; flex-shrink: 0; align-items: center; justify-content: center; }
+.logo-word { display: block; height: 14px; width: auto; }
+.nav-right { display: flex; align-items: center; gap: 6px; }
+.nav-back { display: none; padding: 12px 10px; margin: -12px 0; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: rgba(255,255,255,.8); text-decoration: none; transition: color .15s; }
+.nav-back:hover { color: #fff; }
+.btn-pill { display: inline-block; white-space: nowrap; border-radius: 999px; background: #fff; padding: 11px 18px; font-size: 11px; font-weight: 800; letter-spacing: .08em; color: #25205e; text-decoration: none; transition: transform .15s, background .15s; }
+.btn-pill:hover { transform: translateY(-2px); background: #dffcff; }
+@media (min-width: 560px) { .nav-back { display: inline-block; } .nav-right { gap: 14px; } }
+
+/* ---------- masthead ---------- */
+.masthead { padding: 128px 20px 0; }
+.masthead-inner { margin: 0 auto; max-width: 1080px; }
+.eyebrow { font-size: 10px; font-weight: 500; text-transform: uppercase; color: #dffcff; }
+.masthead h1 { margin-top: 14px; font-size: clamp(38px, 7vw, 74px); line-height: .9; }
+.lede { margin-top: 24px; max-width: 60ch; font-size: 16px; line-height: 1.7; color: rgba(255,255,255,.85); }
+.meta-row { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px; }
+.meta-chip { border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07); padding: 8px 14px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .07em; color: rgba(255,255,255,.82); }
+.rule { margin: 44px auto 0; max-width: 1080px; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,.28), rgba(255,255,255,.06) 60%, transparent); }
+
+/* ---------- layout ---------- */
+.shell { margin: 0 auto; max-width: 1120px; padding: 0 20px 96px; display: grid; gap: 40px; align-items: start; }
+@media (min-width: 1024px) { .shell { grid-template-columns: 232px 1fr; gap: 56px; } }
+
+/* table of contents */
+.toc { display: none; }
+@media (min-width: 1024px) {
+  .toc { display: block; position: sticky; top: 104px; padding-top: 44px; }
+  .toc-label { font-size: 9px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.76); }
+  .toc ol { margin: 14px 0 0; padding: 0; list-style: none; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: block; padding: 7px 0 7px 26px; position: relative; font-size: 12.5px; line-height: 1.35; color: rgba(255,255,255,.78); text-decoration: none; transition: color .15s; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); position: absolute; left: 0; top: 8px; font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(255,255,255,.58); }
+  .toc a:hover { color: #fff; }
+  .toc a:hover::before { color: #dffcff; }
+}
+
+/* ---------- prose ---------- */
+.prose { padding-top: 44px; min-width: 0; }
+.sec { counter-increment: sec; padding-top: 40px; }
+.sec:first-child { padding-top: 0; }
+.sec-num { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .12em; color: rgba(255,255,255,.76); }
+.sec h2 { margin-top: 10px; font-size: clamp(22px, 3.4vw, 30px); font-weight: 800; letter-spacing: -.035em; line-height: 1.12; color: #fff; }
+.sec h3 { margin-top: 30px; font-size: 14px; font-weight: 800; letter-spacing: .01em; color: #dffcff; }
+.prose p { margin-top: 16px; font-size: 15.5px; line-height: 1.78; color: rgba(255,255,255,.85); }
+.prose p a, .prose li a { color: #dffcff; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(223,252,255,.45); }
+.prose p a:hover, .prose li a:hover { text-decoration-color: #dffcff; }
+.prose strong { color: #fff; font-weight: 700; }
+.prose ul { margin: 16px 0 0; padding: 0; list-style: none; }
+.prose li { position: relative; padding: 7px 0 7px 24px; font-size: 15.5px; line-height: 1.7; color: rgba(255,255,255,.85); }
+.prose li::before { content: ""; position: absolute; left: 2px; top: 18px; width: 6px; height: 6px; border-radius: 999px; background: rgba(223,252,255,.75); }
+.prose li strong:first-child { color: #fff; }
+
+/* callouts */
+.callout { margin-top: 26px; border-radius: 20px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); padding: 22px 24px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.callout-title { display: flex; align-items: center; gap: 9px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #dffcff; }
+.callout-title svg { flex-shrink: 0; }
+.callout p:first-of-type { margin-top: 12px; }
+.callout ul { margin-top: 12px; }
+.callout-key { border-color: rgba(223,252,255,.4); background: linear-gradient(135deg, rgba(117,100,233,.34) 0%, rgba(59,88,184,.24) 100%); }
+
+/* data table — a horizontal scroller on desktop, stacked cards on phones so the
+   third column cannot be silently cut off */
+.table-wrap { margin-top: 22px; overflow-x: auto; border-radius: 18px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); }
+table { width: 100%; min-width: 620px; border-collapse: collapse; }
+th, td { text-align: left; vertical-align: top; padding: 14px 18px; font-size: 13.5px; line-height: 1.6; border-bottom: 1px solid rgba(255,255,255,.1); }
+th { font-family: 'DM Mono', monospace; font-size: 9.5px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.82); background: rgba(255,255,255,.05); }
+td { color: rgba(255,255,255,.82); }
+td:first-child { color: #fff; font-weight: 700; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+@media (max-width: 719px) {
+  .table-wrap { overflow: visible; border: 0; background: none; }
+  table { min-width: 0; display: block; }
+  thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  tbody, tr, td { display: block; }
+  tr { margin-bottom: 10px; border-radius: 18px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); padding: 6px 2px 12px; }
+  td { border-bottom: 0; padding: 8px 18px; }
+  td:first-child { white-space: normal; font-size: 15px; padding-top: 14px; }
+  td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 5px; font-family: 'DM Mono', monospace; font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.82); }
+}
+
+/* ---------- footer ---------- */
+.footer { border-top: 1px solid rgba(255,255,255,.1); padding: 32px 20px calc(32px + env(safe-area-inset-bottom)); }
+.footer-inner { margin: 0 auto; display: flex; max-width: 1080px; flex-direction: column; align-items: center; justify-content: space-between; gap: 22px; }
+.footer-links { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 20px; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+.footer-links a { padding: 15px 4px; margin: -15px 0; color: rgba(255,255,255,.74); text-decoration: none; transition: color .15s; }
+.footer-links a:hover { color: #fff; }
+.footer-copy { font-size: 10px; color: rgba(255,255,255,.74); text-align: center; }
+@media (min-width: 640px) { .footer-inner { flex-direction: row; flex-wrap: wrap; gap: 20px 24px; } .footer-copy { flex: 1 0 100%; order: 5; } }
+@media (min-width: 640px) { .masthead { padding-top: 152px; } .lede { font-size: 17px; } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <a href="index.html" class="logo" aria-label="Down2Chill home">
+    <span class="logo-badge"><img src="assets/couch.svg" width="28" height="14" alt=""></span>
+    <img class="logo-word" src="assets/down2chill_light.svg" alt="DOWN2CHILL" width="130" height="14">
+  </a>
+  <div class="nav-right">
+    <a class="nav-back" href="index.html">&larr; Back to site</a>
+    <a class="btn-pill" href="https://apps.apple.com/us/app/down2chill/id6444803295" target="_blank" rel="noreferrer">Get the App.</a>
+  </div>
+</header>
+
+<main>
+  <div class="masthead">
+    <div class="masthead-inner">
+      <span class="mono eyebrow">Legal / Privacy</span>
+      <h1 class="display">PRIVACY<br>POLICY.</h1>
+      <p class="lede">Down2Chill exists so you can see which friends are free right now — without broadcasting your life to strangers. This policy explains what we collect, why we collect it, who ever sees it, and what you can do about it. No dense boilerplate, no hidden clauses.</p>
+      <div class="meta-row">
+        <span class="meta-chip">EFFECTIVE 27 AUG 2026</span>
+        <span class="meta-chip">D2C HOLDINGS LLC</span>
+        <span class="meta-chip">WE DON&rsquo;T SELL YOUR DATA</span>
+      </div>
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  <div class="shell">
+    <nav class="toc" aria-label="On this page">
+      <span class="toc-label">On this page</span>
+      <ol>
+        <li><a href="#who">Who we are</a></li>
+        <li><a href="#collect">What we collect</a></li>
+        <li><a href="#use">How we use it</a></li>
+        <li><a href="#never">What we never do</a></li>
+        <li><a href="#share">When we share</a></li>
+        <li><a href="#location">Location</a></li>
+        <li><a href="#cookies">Cookies &amp; analytics</a></li>
+        <li><a href="#choices">Your choices</a></li>
+        <li><a href="#us-rights">US state privacy rights</a></li>
+        <li><a href="#eu-rights">UK &amp; EU rights</a></li>
+        <li><a href="#children">Children&rsquo;s privacy</a></li>
+        <li><a href="#retention">How long we keep it</a></li>
+        <li><a href="#security">Security</a></li>
+        <li><a href="#changes">Changes</a></li>
+        <li><a href="#contact">Contact us</a></li>
+      </ol>
+    </nav>
+
+    <div class="prose">
+
+      <section class="sec" id="who">
+        <span class="sec-num">01 / WHO WE ARE</span>
+        <h2>Who this policy covers</h2>
+        <p>Down2Chill is operated by <strong>D2C HOLDINGS LLC</strong> (&ldquo;Down2Chill&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;). For people in the UK and EU, D2C HOLDINGS LLC is the <em>data controller</em> for the information described here.</p>
+        <p>This policy applies to the Down2Chill mobile apps for iOS and Android, the down2chill.com website, and the browser-based invite pages. It does not cover anything a third party does on their own account &mdash; if you follow a link out of Down2Chill, that site&rsquo;s own policy takes over.</p>
+        <p>If anything here is unclear, email <a href="mailto:team@down2chill.com">team@down2chill.com</a> and a human will answer.</p>
+      </section>
+
+      <section class="sec" id="collect">
+        <span class="sec-num">02 / WHAT WE COLLECT</span>
+        <h2>The information we collect</h2>
+        <p>We try to collect the least we can while still making the app work. Here is the whole list.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Category</th><th scope="col">Examples</th><th scope="col">Why we need it</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Account details</td>
+                <td data-label="Examples">Name, username, email address, phone number, date of birth, profile photo</td>
+                <td data-label="Why we need it">To create and secure your account, let friends recognise you, and confirm you meet our minimum age</td>
+              </tr>
+              <tr>
+                <td>Contacts <em>(optional)</em></td>
+                <td data-label="Examples">Names and phone numbers from your device address book, only if you turn the feature on</td>
+                <td data-label="Why we need it">To show you which of your contacts already use Down2Chill. We never message your contacts on your behalf</td>
+              </tr>
+              <tr>
+                <td>Availability</td>
+                <td data-label="Examples">The mood or activity you pick, when you go online, and who you have chosen to be visible to</td>
+                <td data-label="Why we need it">This is the product. Without it there is nothing to show your friends</td>
+              </tr>
+              <tr>
+                <td>Content you create</td>
+                <td data-label="Examples">Messages, photos and media you send, group names, invites</td>
+                <td data-label="Why we need it">To deliver it to the people you sent it to, and to run the safety scanning described in our Child Safety policy</td>
+              </tr>
+              <tr>
+                <td>Location <em>(optional)</em></td>
+                <td data-label="Examples">Approximate or precise device location, only while you have granted permission</td>
+                <td data-label="Why we need it">To power the map and friend view. The app still works with location switched off</td>
+              </tr>
+              <tr>
+                <td>Device &amp; usage</td>
+                <td data-label="Examples">Device model, operating system, app version, language, IP address, crash reports, in-app events</td>
+                <td data-label="Why we need it">To keep the app running, diagnose faults, and understand which features get used</td>
+              </tr>
+              <tr>
+                <td>Website data</td>
+                <td data-label="Examples">Pages viewed, referring link, approximate region, cookie identifier</td>
+                <td data-label="Why we need it">Anonymous analytics for down2chill.com only, and only if you allow it</td>
+              </tr>
+              <tr>
+                <td>Mailing list</td>
+                <td data-label="Examples">The email address you submit on our website</td>
+                <td data-label="Why we need it">To send you the updates you asked for. Unsubscribe at any time</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>We do not ask for and do not want your government ID, payment card, biometric data, health data, or anything else in that category.</p>
+      </section>
+
+      <section class="sec" id="use">
+        <span class="sec-num">03 / HOW WE USE IT</span>
+        <h2>What we do with it</h2>
+        <p>Every use below is tied to a purpose. Where UK or EU law applies, the legal basis is named in brackets.</p>
+        <ul>
+          <li><strong>Run the service.</strong> Create your account, show your friends&rsquo; availability, deliver your messages, sync your groups. <em>(Performance of our contract with you.)</em></li>
+          <li><strong>Keep people safe.</strong> Detect spam, fraud, harassment and abuse, and scan uploaded images for child sexual abuse material as described in our <a href="child-safety.html">Child Safety policy</a>. <em>(Our legitimate interest in a safe platform, and our legal obligations.)</em></li>
+          <li><strong>Fix and improve things.</strong> Read crash reports, measure which features are used, and test improvements &mdash; in aggregate wherever possible. <em>(Legitimate interests, or your consent where the law requires it.)</em></li>
+          <li><strong>Talk to you.</strong> Send service messages you cannot opt out of, such as security alerts and account notices, and send marketing email only if you asked for it. <em>(Contract for service messages; consent for marketing.)</em></li>
+          <li><strong>Meet our legal duties.</strong> Respond to valid legal process and make reports we are required by law to make. <em>(Legal obligation.)</em></li>
+        </ul>
+        <p>We do not use your personal information to train advertising profiles, and we do not make decisions about you by automated means that produce legal or similarly significant effects.</p>
+      </section>
+
+      <section class="sec" id="never">
+        <span class="sec-num">04 / WHAT WE NEVER DO</span>
+        <h2>The commitments we hold ourselves to</h2>
+        <div class="callout callout-key">
+          <span class="callout-title"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Our promises</span>
+          <ul>
+            <li><strong>We do not sell your personal information</strong>, and we have not done so in the preceding twelve months.</li>
+            <li><strong>We do not share it for cross-context behavioural advertising</strong>, as those terms are defined under California law.</li>
+            <li><strong>We do not show third-party advertising</strong> inside the Down2Chill app.</li>
+            <li><strong>We do not post, message, or invite anyone on your behalf</strong> without you asking us to.</li>
+            <li><strong>We do not track your location in the background</strong> for marketing purposes.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="sec" id="share">
+        <span class="sec-num">05 / WHEN WE SHARE</span>
+        <h2>Who else ever sees your information</h2>
+
+        <h3>Other people on Down2Chill, as you direct</h3>
+        <p>Your availability is visible to the friends you have chosen to be visible to &mdash; nobody else. Content you send to a person or a group is visible to that person or that group. You control this in the app, and you can change it at any time.</p>
+
+        <h3>Service providers working on our instructions</h3>
+        <p>We use a small number of vendors to run the service. They may only process your information to provide their service to us, under contract, and never for their own purposes:</p>
+        <ul>
+          <li><strong>Google Firebase</strong> &mdash; app hosting, sign-in, database, file storage, and automated image moderation.</li>
+          <li><strong>Google Analytics via Google Tag Manager</strong> &mdash; website analytics only, and only where you have allowed analytics cookies.</li>
+          <li><strong>CookieYes</strong> &mdash; records and honours your cookie choice on our website.</li>
+          <li><strong>Google Workspace</strong> &mdash; our email and the sheet behind the website mailing-list form.</li>
+        </ul>
+
+        <h3>Law enforcement and legal process</h3>
+        <p>We disclose information to authorities only when we receive a legally valid request such as a subpoena, court order or warrant, or where we believe in good faith that disclosure is necessary to prevent imminent physical harm. Separately, United States law requires us to report apparent child sexual abuse material to the National Center for Missing &amp; Exploited Children; we do so, and we preserve the associated evidence as the law requires.</p>
+
+        <h3>If the business changes hands</h3>
+        <p>If Down2Chill is involved in a merger, acquisition or sale of assets, your information may transfer to the new owner. We will tell you before that happens, and this policy continues to apply to the information until it is replaced by one you have been notified of.</p>
+      </section>
+
+      <section class="sec" id="location">
+        <span class="sec-num">06 / LOCATION</span>
+        <h2>How location works</h2>
+        <p>Location is optional. The app asks for permission the first time you use a feature that needs it, and your device &mdash; not us &mdash; decides whether to grant it. You can revoke it at any time in iOS or Android settings, and the rest of the app keeps working.</p>
+        <p>We use location to place you and your friends on the map and to power the real-time friend view. We do not sell location data, we do not share it with data brokers, and we do not collect it to build an advertising profile.</p>
+      </section>
+
+      <section class="sec" id="cookies">
+        <span class="sec-num">07 / COOKIES &amp; ANALYTICS</span>
+        <h2>Cookies on our website</h2>
+        <p>down2chill.com uses two kinds of cookies and nothing else:</p>
+        <ul>
+          <li><strong>Strictly necessary</strong> &mdash; these make the site work and remember your privacy choice. They cannot be switched off.</li>
+          <li><strong>Anonymous analytics</strong> &mdash; these tell us how many people visit and which pages they read. They are optional.</li>
+        </ul>
+        <p>There are no advertising cookies on this site. You can change your analytics choice at any time using the <strong>COOKIES</strong> link in the footer of our <a href="index.html">homepage</a>.</p>
+        <p>This page and our <a href="child-safety.html">Child Safety policy</a> load no analytics and set no optional cookies at all, so you can read them without making a choice first.</p>
+        <p>The mobile app does not use browser cookies. It stores a small amount of data on your device &mdash; a sign-in token and your app preferences &mdash; so you do not have to log in every time.</p>
+      </section>
+
+      <section class="sec" id="choices">
+        <span class="sec-num">08 / YOUR CHOICES</span>
+        <h2>The controls you have</h2>
+        <ul>
+          <li><strong>Edit your profile and visibility</strong> at any time from inside the app, including who can see that you are free.</li>
+          <li><strong>Turn off location or contacts access</strong> in your device&rsquo;s iOS or Android settings.</li>
+          <li><strong>Stop marketing email</strong> using the unsubscribe link in any message we send, or by emailing us.</li>
+          <li><strong>Get a copy of your data, or ask us to correct it</strong>, by emailing <a href="mailto:team@down2chill.com">team@down2chill.com</a>.</li>
+        </ul>
+        <div class="callout">
+          <span class="callout-title"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Deleting your account</span>
+          <p>You can delete your Down2Chill account from within the app, or by emailing <a href="mailto:team@down2chill.com">team@down2chill.com</a> from the address on your account. We will confirm and complete the request within 45 days.</p>
+          <p>When an account is deleted we remove your profile, your availability history and the content you uploaded. Two things survive, and we would rather say so plainly: messages you already sent may remain in the recipient&rsquo;s copy of a conversation, and any records we are legally required to keep &mdash; principally child-safety reports &mdash; are retained for as long as the law requires.</p>
+        </div>
+      </section>
+
+      <section class="sec" id="us-rights">
+        <span class="sec-num">09 / US STATE PRIVACY RIGHTS</span>
+        <h2>If you live in the United States</h2>
+        <p>Residents of California, Colorado, Connecticut, Virginia, Utah, Texas, Oregon, Montana and other states with comprehensive privacy laws have specific rights. We extend all of them to every user in the United States, whether or not your state has passed such a law:</p>
+        <ul>
+          <li><strong>Know and access</strong> &mdash; what personal information we hold about you, where it came from, why we collected it, and who we disclosed it to.</li>
+          <li><strong>Correct</strong> &mdash; ask us to fix information that is wrong.</li>
+          <li><strong>Delete</strong> &mdash; ask us to erase your personal information, subject to the legal exceptions described above.</li>
+          <li><strong>Portability</strong> &mdash; get a copy in a portable, machine-readable format.</li>
+          <li><strong>Opt out</strong> &mdash; of the sale of personal information, of sharing for targeted advertising, and of profiling. As set out in section 04, we do none of these, so there is nothing to opt out of. We will keep this section accurate if that ever changes.</li>
+          <li><strong>Non-discrimination</strong> &mdash; we will never give you a worse service, or a worse price, for exercising any of these rights.</li>
+          <li><strong>Appeal</strong> &mdash; if we refuse a request, you can ask us to reconsider by replying to our decision. We will respond in writing.</li>
+        </ul>
+        <p>To make a request, email <a href="mailto:team@down2chill.com">team@down2chill.com</a> from the address on your account, or tell us enough for us to find your account safely. We will verify who you are before we act, because handing your data to the wrong person would be the worse outcome. You may use an authorised agent; we will ask for proof of their authority.</p>
+        <p><strong>California &ldquo;Shine the Light&rdquo;:</strong> we do not disclose personal information to third parties for their own direct marketing purposes.</p>
+      </section>
+
+      <section class="sec" id="eu-rights">
+        <span class="sec-num">10 / UK &amp; EU RIGHTS</span>
+        <h2>If you are in the UK or the EEA</h2>
+        <p>Under the UK GDPR and the EU GDPR you have the right to access your data, have it corrected or erased, restrict or object to how we process it, receive it in a portable format, and withdraw consent at any time where our processing is based on consent. Withdrawing consent does not affect processing we carried out beforehand.</p>
+        <p>You also have the right to complain to your data protection authority. In the UK that is the Information Commissioner&rsquo;s Office; in the EEA it is the supervisory authority for the country you live in. We would appreciate the chance to put things right first.</p>
+        <p><strong>International transfers.</strong> We are based in the United States and your information is processed there. Where we transfer personal information out of the UK or the EEA, we rely on the appropriate safeguards permitted by law, including the European Commission&rsquo;s Standard Contractual Clauses and the UK Addendum, together with our providers&rsquo; own transfer frameworks.</p>
+      </section>
+
+      <section class="sec" id="children">
+        <span class="sec-num">11 / CHILDREN&rsquo;S PRIVACY</span>
+        <h2>Down2Chill is not for children</h2>
+        <p><strong>You must be at least 13 years old to use Down2Chill</strong>, and older where your country sets a higher age for consenting to online services &mdash; 16 in much of the EEA unless local law says otherwise. We ask for your date of birth when you sign up in order to enforce this.</p>
+        <p>We do not knowingly collect personal information from children under 13. If we learn that we have, we delete the account and the information promptly. If you are a parent or guardian and believe your child has created an account, email <a href="mailto:team@down2chill.com">team@down2chill.com</a> and we will act.</p>
+        <div class="callout">
+          <span class="callout-title"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0"/></svg>Child safety</span>
+          <p>We operate a zero-tolerance policy on child sexual abuse and exploitation, scan uploaded images automatically, and report to the authorities where required. Read the full <a href="child-safety.html">Child Safety policy</a>, including how to report something to us.</p>
+        </div>
+      </section>
+
+      <section class="sec" id="retention">
+        <span class="sec-num">12 / RETENTION</span>
+        <h2>How long we keep things</h2>
+        <ul>
+          <li><strong>Account information</strong> &mdash; for as long as your account is open, then deleted when you close it, subject to the exceptions in section 08.</li>
+          <li><strong>Availability status</strong> &mdash; this is the point of the product: your status expires when the moment does. We do not keep a permanent record of where you were and who you were with.</li>
+          <li><strong>Messages and media</strong> &mdash; until you or the other participants delete them, or you close your account.</li>
+          <li><strong>Technical logs and crash reports</strong> &mdash; on a short rolling window, typically no more than 90 days.</li>
+          <li><strong>Mailing-list email addresses</strong> &mdash; until you unsubscribe.</li>
+          <li><strong>Safety and legal records</strong> &mdash; for as long as the applicable law requires us to keep them.</li>
+        </ul>
+      </section>
+
+      <section class="sec" id="security">
+        <span class="sec-num">13 / SECURITY</span>
+        <h2>How we protect it</h2>
+        <p>Your data is encrypted in transit and encrypted at rest by our infrastructure provider. Access to production systems is limited to the people who need it. We review our security practices as the service grows.</p>
+        <p>No system is perfect, and anyone who tells you otherwise is selling something. Please use a strong, unique password and be thoughtful about what you share. If you believe your account has been accessed by someone else, or you have found a security problem, write to <a href="mailto:team@down2chill.com">team@down2chill.com</a> &mdash; we take reports seriously and we will not pursue researchers who act in good faith.</p>
+        <p>If a breach occurs that puts your information at risk, we will notify affected users and the relevant regulators within the timeframes the law sets.</p>
+      </section>
+
+      <section class="sec" id="changes">
+        <span class="sec-num">14 / CHANGES</span>
+        <h2>If this policy changes</h2>
+        <p>We will update the effective date at the top of this page whenever we change it. If a change materially affects how we handle your information, we will tell you in the app or by email before it takes effect, and where the law requires it we will ask for your consent rather than assume it.</p>
+      </section>
+
+      <section class="sec" id="contact">
+        <span class="sec-num">15 / CONTACT</span>
+        <h2>Talk to us</h2>
+        <p>Privacy questions, data requests, complaints, or anything on this page you think we have got wrong:</p>
+        <div class="callout">
+          <span class="callout-title"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>Down2Chill privacy</span>
+          <p><strong>D2C HOLDINGS LLC</strong><br>
+          Email: <a href="mailto:team@down2chill.com">team@down2chill.com</a><br>
+          Related: <a href="child-safety.html">Child Safety policy</a></p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <a href="index.html" class="logo" aria-label="Down2Chill">
+      <span class="logo-badge"><img src="assets/couch.svg" width="28" height="14" alt=""></span>
+      <img class="logo-word" src="assets/down2chill_light.svg" alt="DOWN2CHILL" width="130" height="14">
+    </a>
+    <div class="footer-links">
+      <a href="index.html">HOME</a>
+      <a href="index.html#faq">FAQ</a>
+      <a href="mailto:team@down2chill.com">CONTACT</a>
+      <a href="privacy.html" aria-current="page">PRIVACY</a>
+      <a href="child-safety.html">CHILD SAFETY</a>
+    </div>
+    <a class="btn-pill" href="https://apps.apple.com/us/app/down2chill/id6444803295" target="_blank" rel="noreferrer">Get the App.</a>
+    <span class="mono footer-copy">© <span id="year">2026</span> DOWN2CHILL. ALL RIGHTS RESERVED. / MADE FOR THE IN-BETWEEN</span>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+  // store links follow the platform you are actually on
+  if (navigator.userAgent.toLowerCase().indexOf('android') !== -1) {
+    document.querySelectorAll('.btn-pill').forEach(function (a) {
+      a.href = 'https://play.google.com/store/apps/details?id=com.down2chill.v3&pcampaignid=web_share';
+    });
+  }
+</script>
+</body>
+</html>

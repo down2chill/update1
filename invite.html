@@ -474,9 +474,8 @@ a.guest:hover img,.more-g:hover{transform:scale(1.05)}
 .lb-bar button:hover{background:rgba(255,255,255,.26)}
 .lb-bar button+button{margin-left:0}      /* only the first button takes the auto gap */
 .lb-bar .lb-del:hover{background:rgba(220,38,38,.55)}
-.msg .mdel{margin-left:7px;color:var(--muted-2);opacity:.65;vertical-align:middle}
-.msg .mdel svg.i{width:13px;height:13px}
-.msg .mdel:hover{color:#dc2626;opacity:1}
+.bub[data-msg]{cursor:pointer}
+.bub[data-msg]:hover{filter:brightness(.985)}
 .lb-stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:0 12px}
 .lb-stage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:14px;
   box-shadow:0 24px 60px -20px rgba(0,0,0,.7)}
@@ -988,6 +987,15 @@ button.view-all{display:block;width:100%;text-align:center}
 .cta.solo{flex:none;width:100%;margin-top:20px}
 .srow.noact{cursor:default}
 .srow.act{cursor:pointer}
+/* ---- CookieYes (injected by GTM) ----
+   Never on the first paint and never off the Home page: everything stays
+   hidden until the visitor's first tap flips body.cky-show on Home. */
+.cky-consent-container,.cky-consent-bar,.cky-overlay,.cky-modal,
+.cky-btn-revisit-wrapper{display:none!important}
+body.cky-show .cky-consent-container,body.cky-show .cky-consent-bar,
+body.cky-show .cky-overlay,body.cky-show .cky-modal{display:block!important}
+body.cky-show .cky-btn-revisit-wrapper{display:flex!important;top:auto!important;
+  left:auto!important;right:12px!important;bottom:104px!important;z-index:45!important}
 .tzn{font-size:11.5px;font-weight:600;color:var(--muted);background:var(--soft);
   padding:2px 7px;border-radius:999px;vertical-align:2px}
 /* ---- info button + sign-in state ---- */
@@ -1870,7 +1878,7 @@ function msgFrom(m){
   return { fromUid: m.fromUid || "", fromName: m.fromName || "Someone",
            fromAvatarUrl: m.fromAvatarUrl || "", text: m.text || "",
            imageUrl: m.imageUrl || "", imagePath: m.imagePath || "",
-           at: m.at || "", ms: m.ms || 0,
+           at: m.at || "", ms: m.ms || 0, edited: !!m.edited,
            isYou: m.fromUid ? myUids().indexOf(m.fromUid) > -1 : !!m.isYou };
 }
 
@@ -1986,24 +1994,45 @@ function seedDetail(ev){
 /* Append locally (offline mode); live mode goes through D2C.sendMessage. */
 function appendLocalMessage(id, text, imageUrl){
   var ev = STORE.byId[id]; if(!ev) return;
-  var m = loadMe();
-  ev.messages = (ev.messages || []).concat([{
+  var m = loadMe(), msg = {
     fromUid: m.uid, fromName: m.name || "Guest", fromAvatarUrl: meAvatar(),
     text: text || "", imageUrl: imageUrl || "",
-    at: new Date().toISOString(), isYou: true
-  }]);
+    at: new Date().toISOString(), isYou: true, ms: Date.now()
+  };
+  ev.messages = (ev.messages || []).concat([msg]);
   STORE.notify();
+  return msg;
 }
 
 /* Offline feed entry - live mode writes the activity doc instead and the
    stream brings it back. Newest first, matching the desc order. */
-function appendLocalActivity(id, icon, text, isCheck){
+function appendLocalActivity(id, icon, text, isCheck, ms){
   var ev = STORE.byId[id]; if(!ev || !ev.activity) return;
   var m = loadMe();
   ev.activity.unshift({ personName: m.name || 'Guest', personAvatarUrl: meAvatar(),
-    icon: icon, isCheck: !!isCheck, text: text, whenLabel: '',
+    icon: icon, isCheck: !!isCheck, text: text, whenLabel: '', ms: ms || 0,
     at: new Date().toISOString(), quote: /^[“"]/.test(text) });
   STORE.notify();
+}
+/* chat entries in the feed mirror the LIVE message: once it's deleted or
+   edited, the original words stop showing here too */
+function actText(ev, a){
+  if(a.icon !== 'chat' && a.icon !== 'cam') return a.text;
+  var msgs = ev.messages || [], mi = -1, i;
+  if(a.ms){
+    for(i = 0; i < msgs.length; i++) if(msgs[i].ms === a.ms){ mi = i; break; }
+  } else if(a.icon === 'chat'){
+    /* pre-stamp entries: match the quoted text (the quote may be truncated) */
+    var q = String(a.text || '').replace(/^“/, '').replace(/”$/, ''),
+        pre = q.slice(-1) === '…' ? q.slice(0, -1) : null;
+    for(i = 0; i < msgs.length; i++){
+      var tx = msgs[i].text || '';
+      if(tx === q || (pre && tx.indexOf(pre) === 0)){ mi = i; break; }
+    }
+  } else return a.text;      /* old photo-in-chat entries carry no handle */
+  if(mi < 0) return 'deleted a message';
+  if(msgs[mi].edited) return 'edited a message';
+  return a.text;
 }
 
 function useLocalData(reason){
@@ -2509,7 +2538,8 @@ function renderEvent(id){
     ? (acts.length
         ? '<ul class="feed">'+(actsOpen?acts:acts.slice(0,5)).map(function(a){
             return '<li>'+img(a.personAvatarUrl,'')+ico(a.icon,a.isCheck?'ok':'')+
-              '<p><b>'+h(fname(a.personName))+(a.quote?':':'')+'</b> '+h(a.text)+
+              (function(){ var atx=actText(ev,a);
+                return '<p><b>'+h(fname(a.personName))+(a.quote&&atx===a.text?':':'')+'</b> '+h(atx); })()+
               '</p><time>'+h(a.at?ago(a.at):a.whenLabel)+'</time></li>'; }).join('')+'</ul>'+
           (acts.length>5
             ? '<button class="view-all" type="button" data-actmore="'+ev.id+'">'+
@@ -2859,16 +2889,18 @@ function renderChat(id){
   markSeen(ev.id, msgs.length);        /* viewing the thread clears the badge */
   var body = msgs.length
     ? '<div class="thread">'+msgs.map(function(m,mi){
-        var mayDel = ev.role==='hosting' || m.isYou;
+        /* tapping a bubble opens its options: the poster edits/deletes their
+           own, the host deletes anyone's */
+        var acts = ev.role==='hosting' || m.isYou;
         return '<div class="msg'+(m.isYou?' me':'')+'">'+
           (m.isYou?'':img(m.fromAvatarUrl,''))+
-          '<div class="bub"><span class="who2">'+(m.isYou?'You':h(m.fromName))+'</span>'+
+          '<div class="bub"'+(acts?' data-msg="'+mi+'" role="button" tabindex="0" '+
+            'aria-label="Message options"':'')+'>'+
+            '<span class="who2">'+(m.isYou?'You':h(m.fromName))+'</span>'+
             (m.imageUrl?'<img class="chat-img" src="'+h(m.imageUrl)+'" data-imgview="'+h(m.imageUrl)+
               '" data-imgby="'+h(fname(m.fromName))+'" alt="Photo from '+h(fname(m.fromName))+'">':'')+
             (m.text?'<p>'+h(m.text)+'</p>':'')+
-            '<time>'+h(ago(m.at))+'</time>'+
-            (mayDel?'<button class="mdel" type="button" data-mdel="'+mi+
-              '" aria-label="Delete this message">'+ico('x2')+'</button>':'')+
+            '<time>'+h(ago(m.at))+(m.edited?' · edited':'')+'</time>'+
           '</div>'+
         '</div>'; }).join('')+'</div>'
     : '<p class="chat-empty">No messages yet. Say hello \uD83D\uDC4B</p>';
@@ -4653,6 +4685,7 @@ function eventDock(id){
                             : (r.v==='create'||r.v==='edit') ? 'has-cbar'
                             : (r.v==='guests'||r.v==='photos'||r.v==='chat') ? '' : 'has-nav';
     if(!modal.hidden) document.body.classList.add('modal-open');   /* survives the reset */
+    if(CKY_OK && r.v==='home') document.body.classList.add('cky-show');   /* consent lives on Home only */
     var cSheet=modal.querySelector('[data-claimfor]');
     if(cSheet && r.v==='event' && cSheet.dataset.claimfor===r.id){
       var cInp=document.getElementById('claim-name'),
@@ -4710,8 +4743,10 @@ function eventDock(id){
     if(mi){
       /* the menu is parented into the card, which is an <a> */
       e.preventDefault();
-      var act=mi.dataset.emenu, mid=menuEvent;
+      var act=mi.dataset.emenu, mid=menuEvent, mm=menuMsg;
       closeMenu();
+      if(act==='medit'){ if(mm) openMsgEdit(mm.id, mm.idx); return; }
+      if(act==='mdelete'){ if(mm) delMsg(mm.id, mm.idx); return; }
       if(act==='edit')   go('#edit/'+mid);
       if(act==='hide')   hideOne(mid);
       if(act==='delete') askDelete(mid);
@@ -4747,20 +4782,6 @@ function eventDock(id){
       modal.innerHTML=confirmCard('Delete this photo?',
         'It comes off the event for everyone. This can’t be undone.','Delete Photo');
       modal.hidden=false; document.body.classList.add('modal-open'); modalShown();
-      return;
-    }
-    var mdl=t.closest('[data-mdel]');
-    if(mdl){
-      var cev=findEvent(route().id), cm=cev && cev.messages && cev.messages[+mdl.dataset.mdel];
-      if(!cm) return;
-      if(STORE.mode==='live' && window.D2C && D2C.deleteMessage){
-        D2C.deleteMessage(cev.id, cm)
-          .then(function(){ toast('Message removed'); })
-          .catch(function(e){ toast((e&&e.message)||'Could not remove that','err',4000); });
-      } else {
-        cev.messages.splice(+mdl.dataset.mdel,1);
-        STORE.notify(); toast('Message removed');
-      }
       return;
     }
     var addp=t.closest('[data-addphoto]');
@@ -5128,6 +5149,22 @@ function eventDock(id){
       vd.vibes.push(vb.dataset.vibe);
       saveDraft(); repaintVibes(); return;
     }
+    if(t.closest('[data-medit-save]')){
+      var mev2=MEDIT && findEvent(MEDIT.id),
+          mm2=mev2 && mev2.messages && mev2.messages[MEDIT.idx],
+          mval=(document.getElementById('me-in')||{value:''}).value.trim();
+      if(!mm2){ closeModal(); return; }
+      if(!mval){ toast('A message can’t be empty - delete it instead.','err',4000); return; }
+      if(STORE.mode==='live' && window.D2C && D2C.editMessage){
+        D2C.editMessage(mev2.id, mm2, mval)
+          .then(function(){ toast('Message updated'); })
+          .catch(function(e){ toast((e&&e.message)||'Could not save the edit','err',4000); });
+      } else {
+        mm2.text=mval; mm2.edited=true;
+        STORE.notify(); toast('Message updated');
+      }
+      MEDIT=null; closeModal(); return;
+    }
     if(t.closest('[data-cvibe-save]')){
       var cvi=document.getElementById('cv-in'), cdd=loadDraft();
       cdd.vibeCustom=(cvi&&cvi.value.trim())||'';
@@ -5234,6 +5271,8 @@ function eventDock(id){
     if(ph){ openLb(route().id, +ph.dataset.ph); return; }
     var ivw=t.closest('[data-imgview]');
     if(ivw){ openImgLb(ivw.dataset.imgview, ivw.dataset.imgby||''); return; }
+    var mb=t.closest('[data-msg]');
+    if(mb){ openMsgMenu(mb); return; }
     var lbs=t.closest('[data-lb-step]');
     if(lbs){ stepLb(+lbs.dataset.lbStep); return; }
     /* NB: `lb` is shadowed here - a `var lb` in the search branch above hoists
@@ -5945,9 +5984,9 @@ function eventDock(id){
     if(STORE.mode==='live' && window.D2C && D2C.sendMessage){
       D2C.sendMessage(id, text).catch(function(e){ toast(e.message||'Could not send','err'); });
     } else {
-      appendLocalMessage(id, text);
+      var lm=appendLocalMessage(id, text);
       appendLocalActivity(id, 'chat',
-        '“'+(text.length>80?text.slice(0,80)+'…':text)+'”');
+        '“'+(text.length>80?text.slice(0,80)+'…':text)+'”', false, lm && lm.ms);
     }
     scrollThread();
   }
@@ -5972,8 +6011,8 @@ function eventDock(id){
           .then(function(){ toast('Photo sent'); scrollThread(); })
           .catch(function(e){ toast(e.message||'Could not send photo','err'); });
       } else {
-        appendLocalMessage(id, '', URL.createObjectURL(file));
-        appendLocalActivity(id, 'cam', 'sent a photo in the chat');
+        var lim=appendLocalMessage(id, '', URL.createObjectURL(file));
+        appendLocalActivity(id, 'cam', 'sent a photo in the chat', false, lim && lim.ms);
         scrollThread();
       }
     };
@@ -6131,6 +6170,59 @@ function eventDock(id){
         k==='going'?'is Going':k==='maybe'?'might come':'can\u2019t make it', k==='going');
       toast(k==='going'?'You\u2019re going!':k==='maybe'?'Marked as maybe':'Marked as can\u2019t go');
     }
+  }
+
+  /* CookieYes shows only on Home, and only after the visitor's first tap -
+     never over the invite they just opened */
+  var CKY_OK=false;
+  document.addEventListener('click', function(){
+    CKY_OK=true;
+    if(route().v==='home') document.body.classList.add('cky-show');
+  }, { once:true, capture:true });
+
+  /* ---------- message menu + edit ---------- */
+  var menuMsg=null, MEDIT=null;
+  function openMsgMenu(bub){
+    var ev=findEvent(route().id), idx=+bub.dataset.msg,
+        m=ev && ev.messages && ev.messages[idx];
+    if(!m) return;
+    if(anchor===bub){ closeMenu(); return; }
+    closeMenu();
+    menu.innerHTML =
+      (m.isYou && m.text ? mItem('medit','pen','Edit message') : '')+
+      mItem('mdelete','trash','Delete message',1);
+    menuMsg={ id: ev.id, idx: idx };
+    anchor=bub; bub.setAttribute('aria-expanded','true');
+    placeMenu(bub);
+  }
+  function delMsg(id, idx){
+    var ev=findEvent(id), m=ev && ev.messages && ev.messages[idx];
+    if(!m) return;
+    if(STORE.mode==='live' && window.D2C && D2C.deleteMessage){
+      D2C.deleteMessage(ev.id, m)
+        .then(function(){ toast('Message removed'); })
+        .catch(function(e){ toast((e&&e.message)||'Could not remove that','err',4000); });
+    } else {
+      ev.messages.splice(idx,1);
+      STORE.notify(); toast('Message removed');
+    }
+  }
+  function openMsgEdit(id, idx){
+    var ev=findEvent(id), m=ev && ev.messages && ev.messages[idx];
+    if(!m || !m.text) return;
+    MEDIT={ id:id, idx:idx };
+    modal.innerHTML='<div class="modal-card claim">'+
+      '<button class="modal-x" type="button" data-modal-close aria-label="Close">'+ico('x')+'</button>'+
+      '<div class="modal-ic">'+ico('pen')+'</div>'+
+      '<h3 id="modal-h">Edit message</h3>'+
+      '<input class="inp" id="me-in" type="text" maxlength="500" value="'+h(m.text)+'" '+
+        'aria-label="Message text">'+
+      '<button class="modal-cta" type="button" data-medit-save>Save</button>'+
+      '<button class="modal-later" type="button" data-modal-close>Cancel</button>'+
+    '</div>';
+    modal.hidden=false; document.body.classList.add('modal-open');
+    modalShown();
+    var mei=document.getElementById('me-in'); if(mei){ mei.focus(); mei.select(); }
   }
 
   /* ---------- event menu ---------- */
@@ -6674,23 +6766,36 @@ async function deletePhoto(eventId, photoId, path){
   if(path) deleteFile(path);
   logActivity(eventId, "x", "removed a photo");
 }
+function msgIndex(arr, m){
+  for(let i = arr.length - 1; i >= 0; i--){
+    const c = arr[i];
+    if((m.ms && c.ms === m.ms) ||
+       (!m.ms && c.at === m.at && (c.fromUid || "") === m.fromUid &&
+        (c.text || "") === m.text && (c.imageUrl || "") === m.imageUrl)) return i;
+  }
+  return -1;
+}
 async function deleteMessage(eventId, m){
   const { db, fs } = await initFirebase();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
   const snap = await fs.getDoc(evRef);
   const arr = (snap.data() || {}).chatMessages || [];
-  let hit = -1;
-  for(let i = arr.length - 1; i >= 0; i--){
-    const c = arr[i];
-    if((m.ms && c.ms === m.ms) ||
-       (!m.ms && c.at === m.at && (c.fromUid || "") === m.fromUid &&
-        (c.text || "") === m.text && (c.imageUrl || "") === m.imageUrl)){ hit = i; break; }
-  }
+  const hit = msgIndex(arr, m);
   if(hit < 0) throw new Error("That message is already gone.");
   const dead = arr[hit];
   arr.splice(hit, 1);
   await fs.updateDoc(evRef, { chatMessages: arr });
   if(dead.imagePath) deleteFile(dead.imagePath);
+}
+async function editMessage(eventId, m, text){
+  const { db, fs } = await initFirebase();
+  const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
+  const snap = await fs.getDoc(evRef);
+  const arr = (snap.data() || {}).chatMessages || [];
+  const hit = msgIndex(arr, m);
+  if(hit < 0) throw new Error("That message is already gone.");
+  arr[hit] = Object.assign({}, arr[hit], { text: text, edited: true });
+  await fs.updateDoc(evRef, { chatMessages: arr });
 }
 
 /* ---------------- 5. edit / delete ---------------- */
@@ -6781,15 +6886,15 @@ async function setPlus(eventId, n){
 /* ---------------- the activity feed ----------------
    Best-effort: one doc per thing that happens, streamed back newest-first.
    Never awaited by callers and never allowed to fail an action. */
-async function logActivity(eventId, icon, text, isCheck){
+async function logActivity(eventId, icon, text, isCheck, extra){
   try {
     const { db, fs } = await initFirebase();
     const me = meIdent();
-    await fs.setDoc(fs.doc(fs.collection(db, ...FS_ROOT, "events", eventId, "activity")), {
+    await fs.setDoc(fs.doc(fs.collection(db, ...FS_ROOT, "events", eventId, "activity")), Object.assign({
       eventUid: eventId, personUid: me.fsId || "", personName: me.name || "Guest",
       personAvatarUrl: me.av, icon: icon, isCheck: !!isCheck, text: text,
       whenLabel: "", at: new Date().toISOString(), order: Date.now(), source: "app"
-    });
+    }, extra || {}));
   } catch(e){ console.warn("activity not logged:", e && e.message); }
 }
 const RSVP_ACT = {
@@ -7094,7 +7199,7 @@ async function watchDetail(id){
     snap => STORE.setDetail(id, { activity: snap.docs.map(d => {
       const a = d.data();
       return { personName: a.personName || "Someone", personAvatarUrl: a.personAvatarUrl || "",
-               icon: a.icon || "check", isCheck: !!a.isCheck, text: a.text || "",
+               icon: a.icon || "check", isCheck: !!a.isCheck, text: a.text || "", ms: a.ms || 0,
                whenLabel: a.whenLabel || "",
                /* docs from before `at` existed still carry their ms epoch in
                   order - derive the time instead of a frozen "Just now" */
@@ -7129,15 +7234,17 @@ async function sendMessage(eventId, text){
   const { db, fs } = await initFirebase();
   const me = meIdent();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
+  const stamp = Date.now();   /* uniqueness for arrayUnion + the feed's handle
+                                 back to this message after edits/deletions */
   await fs.updateDoc(evRef, {
     chatMessages: fs.arrayUnion({
       fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
-      text: text, at: new Date().toISOString(), isYou: true,
-      ms: Date.now()   /* uniqueness: arrayUnion silently drops exact duplicates */
+      text: text, at: new Date().toISOString(), isYou: true, ms: stamp
     })
   });
   trimChat(evRef);
-  logActivity(eventId, "chat", "“" + (text.length > 80 ? text.slice(0, 80) + "…" : text) + "”");
+  logActivity(eventId, "chat",
+    "“" + (text.length > 80 ? text.slice(0, 80) + "…" : text) + "”", false, { ms: stamp });
 }
 
 /* A picture message. The file lives under its own storage prefix (CHAT_ROOT),
@@ -7160,15 +7267,16 @@ async function sendImage(eventId, file){
 
   const me = meIdent();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
+  const stamp = Date.now();
   await fs.updateDoc(evRef, {
     chatMessages: fs.arrayUnion({
       fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
       text: "", imageUrl: url, imagePath: path,
-      at: new Date().toISOString(), isYou: true, ms: Date.now()
+      at: new Date().toISOString(), isYou: true, ms: stamp
     })
   });
   trimChat(evRef);
-  logActivity(eventId, "cam", "sent a photo in the chat");
+  logActivity(eventId, "cam", "sent a photo in the chat", false, { ms: stamp });
   return { url, path };
 }
 
@@ -7176,7 +7284,7 @@ window.D2C = {
   pickPhoto, sendMessage, sendImage, inviteGuests, removeGuest, banGuest,
   requestJoin, suggestInvites, approveRequest, declineRequest,
   uploadCover, deleteFile, createEvent, updateEvent, deleteEvent,
-  deletePhoto, deleteMessage,
+  deletePhoto, deleteMessage, editMessage,
   saveProfile, findByPhone, setRsvp, setPlus, propagateProfile, announceGuest, renameLinked,
   smsSend, smsCheck, smsAbort, smsReady: () => KEY_OK,
   smsPending: () => smsConf ? smsTo : "",     // E.164 a code is out to, else ""

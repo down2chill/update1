@@ -801,6 +801,9 @@ textarea.inp{height:auto;min-height:158px;padding:16px 18px 40px;line-height:1.6
   transition:transform .18s}
 .sw.on{background:var(--primary)}
 .sw.on i{transform:translateX(25px)}
+/* erase-their-content toggle inside the remove-guest popup */
+.modal-card .rm-erase{justify-content:space-between;margin:16px 0 2px;padding:12px 14px;
+  border-radius:14px;background:var(--soft);font-size:13.5px;text-align:left}
 
 .s3cards{display:grid;gap:16px;align-items:start}
 .cgrid.c3>.full{grid-column:1/-1}
@@ -2779,12 +2782,20 @@ function renderGuests(id){
   var pct=invites?Math.round(responses/invites*100):0;
 
   /* the host can manage every row (except their own): pending rows lose the
-     invitation, claimed/answered rows are removed AND banned from the event */
+     invitation, claimed/answered rows are removed AND banned from the event.
+     Other members get a lighter menu on real people (uid rows): ask the host
+     to remove them - nothing happens until the host approves. */
   function rowDots(g){
-    if(ev.role!=='hosting' || g.isHost) return '';
-    return '<button class="dots" type="button" data-gdots="'+h(g.name)+'" data-gduid="'+h(g.uid||'')+
-      '" data-gstat="'+h(g.status||'')+'" aria-haspopup="true" aria-expanded="false" '+
-      'aria-label="Options for '+h(g.name)+'">'+ico('more')+'</button>';
+    if(ev.role==='hosting')
+      return g.isHost ? '' :
+        '<button class="dots" type="button" data-gdots="'+h(g.name)+'" data-gduid="'+h(g.uid||'')+
+        '" data-gstat="'+h(g.status||'')+'" aria-haspopup="true" aria-expanded="false" '+
+        'aria-label="Options for '+h(g.name)+'">'+ico('more')+'</button>';
+    if(g.isHost || g.isYou || !g.uid) return '';
+    if(!(myRsvp(ev.id) || loadMe().claims[ev.id])) return '';
+    return '<button class="dots" type="button" data-greq="'+h(g.name)+'" data-grequid="'+h(g.uid)+
+      '" aria-haspopup="true" aria-expanded="false" aria-label="Options for '+h(g.name)+'">'+
+      ico('more')+'</button>';
   }
   function goingRow(g){
     return '<div class="g-row"><span class="g-av on">'+img(g.avatarUrl,'')+'</span>'+
@@ -2804,8 +2815,9 @@ function renderGuests(id){
   function reqRow(r, i){
     return '<div class="g-row"><span class="g-av">'+img(r.avatarUrl||GAV,'')+'</span>'+
       '<div class="g-txt"><div class="g-name"><b>'+h(r.name)+'</b></div>'+
-        '<small>'+(r.reqType==='invite'
-          ? 'Suggested by '+h(r.byName||'a guest') : 'Wants to join')+
+        '<small>'+(r.reqType==='invite' ? 'Suggested by '+h(r.byName||'a guest')
+                 : r.reqType==='remove' ? 'Removal asked by '+h(r.byName||'a guest')
+                 : 'Wants to join')+
         (r.phone?' · '+h(r.phone):'')+'</small></div>'+
       '<span class="g-end">'+
         '<button class="gadd" type="button" data-rok="'+h(String(r.docId||i))+
@@ -4186,11 +4198,12 @@ function renderEditPage(){
 }
 
 /* ---------- delete confirmation ---------- */
-function confirmCard(title, body, label){
+function confirmCard(title, body, label, extra){
   return '<div class="modal-card">' +
       '<button class="modal-x" type="button" data-modal-close aria-label="Close">' + ico('x') + '</button>' +
       '<div class="modal-ic warn">' + ico('trash') + '</div>' +
       '<h3 id="modal-h">' + h(title) + '</h3><p>' + h(body) + '</p>' +
+      (extra || '') +
       '<button class="modal-cta danger" type="button" data-confirm-yes>' + h(label) + '</button>' +
       '<button class="modal-later" type="button" data-modal-close>Keep it</button>' +
     '</div>';
@@ -4438,19 +4451,15 @@ function claimCard(ev){
   '</div>';
 }
 /* ---- an event that no longer exists for this viewer (deleted, or the
-   host removed them) - indistinguishable on purpose */
-function renderGone(){
-  return '<div class="wrap narrow">' +
-    '<header class="top">' +
-      '<a class="icon-btn" href="#home" data-back="home" aria-label="Back to events">' + ico('back') + '</a>' +
-      brandMark() + '<div class="sp"></div>' + profBtn() +
-    '</header>' +
-    '<div class="modal-card claim" style="margin:44px auto 0">' +
-      '<div class="modal-ic">' + ico('cal-p') + '</div>' +
-      '<h3>Nothing here</h3>' +
-      '<p>This event is no longer available.</p>' +
-      '<a class="modal-cta" href="#home" data-nav>Back to Events</a>' +
-    '</div>' +
+   host removed them) - indistinguishable on purpose. Shown as a popup over
+   Home when a dead link is followed; eviction mid-view just lands on Home. */
+function goneCard(){
+  return '<div class="modal-card claim">' +
+    '<button class="modal-x" type="button" data-modal-close aria-label="Close">' + ico('x') + '</button>' +
+    '<div class="modal-ic">' + ico('cal-p') + '</div>' +
+    '<h3 id="modal-h">Event unavailable</h3>' +
+    '<p>This event is no longer available - it may have ended or been removed by its host.</p>' +
+    '<button class="modal-cta" type="button" data-modal-close>Back to Events</button>' +
   '</div>';
 }
 
@@ -4647,7 +4656,7 @@ function eventDock(id){
       lb=document.getElementById('lightbox'),
       modal=document.getElementById('app-modal'),
       anchor=null, homeTab='upcoming', homeQ='', scrolls={}, curKey='', watching=null,
-      lbEvent=null, lbIdx=0;
+      lbEvent=null, lbIdx=0, lastEvId=null;
 
   function route(){
     var hash=location.hash.replace(/^#/,''), parts=hash.split('/');
@@ -4708,12 +4717,22 @@ function eventDock(id){
 
     closeLb();
     if(curKeyChanged || !modal.querySelector('.claim')) closeModal();
-    /* an event a banned viewer opens (or one that was deleted) is simply gone */
+    /* an event a banned viewer opens (or one that was deleted) is simply gone -
+       never a dead end. Mid-view (the stream just dropped it, i.e. the host
+       removed them) they land straight back on Home; arriving fresh at a dead
+       link lands on Home under an "unavailable" notice. */
     var isDetail=(r.v==='event'||r.v==='guests'||r.v==='photos'||r.v==='chat'),
         dEv=isDetail ? findEvent(r.id) : null,
-        gone=isDetail && !dEv;
-    if(gone){             app.innerHTML=renderGone(); chrome.innerHTML=''; }
-    else if(r.v==='home'){ app.innerHTML=renderHome(homeTab,homeQ,homeSearch); chrome.innerHTML=bottomNav('home'); }
+        gone=isDetail && !dEv, goneNote=false;
+    if(gone){
+      goneNote=lastEvId!==r.id;
+      lastEvId=null;
+      closeModal();
+      history.replaceState({d:0},'','#home');
+      r={v:'home'}; key='#home'; gone=false;
+      curKeyChanged=curKey!==key;
+    } else lastEvId=isDetail ? r.id : null;
+    if(r.v==='home'){ app.innerHTML=renderHome(homeTab,homeQ,homeSearch); chrome.innerHTML=bottomNav('home'); }
     else if(r.v==='calendar'){ app.innerHTML=renderCalendar();  chrome.innerHTML=bottomNav('calendar'); }
     else if(r.v==='event'){    app.innerHTML=renderEvent(r.id); chrome.innerHTML=eventDock(r.id); }
     else if(r.v==='chat'){     var stick=curKeyChanged || app.scrollHeight-app.scrollTop-app.clientHeight<80;
@@ -4727,11 +4746,15 @@ function eventDock(id){
                                chrome.innerHTML=createFoot(r.step); }
     else {                     app.innerHTML=renderGuests(r.id);chrome.innerHTML=''; }
 
-    document.body.className = gone ? ''
-                            : (r.v==='event') ? 'has-dock'
+    document.body.className = (r.v==='event') ? 'has-dock'
                             : (r.v==='create'||r.v==='edit') ? 'has-cbar'
                             : (r.v==='guests'||r.v==='photos'||r.v==='chat') ? '' : 'has-nav';
     if(!modal.hidden) document.body.classList.add('modal-open');   /* survives the reset */
+    if(goneNote){
+      modal.innerHTML=goneCard();
+      modal.hidden=false;
+      document.body.classList.add('modal-open');
+    }
     var cSheet=modal.querySelector('[data-claimfor]');
     if(cSheet && r.v==='event' && cSheet.dataset.claimfor===r.id){
       var cInp=document.getElementById('claim-name'),
@@ -5350,6 +5373,23 @@ function eventDock(id){
       if(mg) askRemoveGuest(mg);
       return;
     }
+    var rq=t.closest('[data-greq]');
+    if(rq){
+      e.stopPropagation();
+      if(anchor===rq){ closeMenu(); return; }
+      closeMenu();
+      menu.innerHTML='<button type="button" role="menuitem" class="danger" data-greqgo>'+
+        ico('trash')+'Request Removal</button>';
+      menuEvent=null;
+      menuGuest={ id:route().id, name:rq.dataset.greq, uid:rq.dataset.grequid||'' };
+      anchor=rq; rq.setAttribute('aria-expanded','true');
+      placeMenu(rq); return;
+    }
+    if(t.closest('[data-greqgo]')){
+      var mq=menuGuest; closeMenu();
+      if(mq) askReqRemove(mq);
+      return;
+    }
     if(!t.closest('#row-menu')) closeMenu();
   });
 
@@ -5877,6 +5917,19 @@ function eventDock(id){
     for(i=0;i<ev.requests.length;i++)
       if(String(ev.requests[i].docId||i)===String(ref)){ r=ev.requests[i]; break; }
     if(!r) return;
+    if(r.reqType==='remove'){
+      /* approving opens the standard remove confirm (erase toggle included);
+         the request doc rides along as reqDoc and clears on either outcome */
+      if(ok){ askRemoveGuest({ id:id, uid:r.targetUid||r.uid, name:r.targetName||r.name,
+                               reqDoc:r.docId }); return; }
+      if(STORE.mode==='live' && window.D2C && r.docId){
+        D2C.declineRequest(ev.id, r.docId)
+          .then(function(){ toast('Request declined'); })
+          .catch(function(e){ toast((e&&e.message)||'Could not update the request','err',4500); });
+        return;
+      }
+      ev.requests.splice(i,1); STORE.notify(); toast('Request declined'); return;
+    }
     if(STORE.mode==='live' && window.D2C && r.docId){
       (ok ? D2C.approveRequest(ev.id, r.docId) : D2C.declineRequest(ev.id, r.docId))
         .then(function(){ toast(ok ? r.name+' approved' : 'Request declined'); })
@@ -6453,22 +6506,67 @@ function eventDock(id){
      event disappears for them and their link stops working. */
   function askRemoveGuest(mg){
     var ev=findEvent(mg.id); if(!ev || !mg.name) return;
-    confirmFn=function(){ doRemoveGuest(mg); };
+    var eraseOn=true;   /* the toggle's live state - read when Remove is tapped */
+    confirmFn=function(){ doRemoveGuest(mg, eraseOn); };
     modal.innerHTML=confirmCard('Remove “'+mg.name+'”?',
       mg.uid
         ? 'They come off the guest list and the event disappears for them - their link stops working. You can invite them again later.'
         : 'Their invitation is withdrawn and they leave the waiting list. You can invite them again anytime.',
-      mg.uid ? 'Remove guest' : 'Remove invitation');
+      mg.uid ? 'Remove guest' : 'Remove invitation',
+      mg.uid
+        ? '<div class="swrow rm-erase"><span>Also erase their messages, photos &amp; activity</span>'+
+          '<button class="sw on" type="button" role="switch" aria-checked="true" id="rm-erase" '+
+          'aria-label="Also erase their messages, photos and activity"><i></i></button></div>'
+        : '');
+    modal.hidden=false;
+    document.body.classList.add('modal-open');
+    var sw=modal.querySelector('#rm-erase');
+    if(sw) sw.addEventListener('click',function(){
+      eraseOn=!eraseOn;
+      sw.classList.toggle('on',eraseOn);
+      sw.setAttribute('aria-checked',String(eraseOn));
+    });
+    var c=modal.querySelector('[data-confirm-yes]'); if(c) c.focus();
+  }
+  /* ---------- a member asks the host to remove someone ---------- */
+  function askReqRemove(mg){
+    var ev=findEvent(mg.id); if(!ev || !mg.uid || !mg.name) return;
+    if((ev.requests||[]).some(function(r){ return r.reqType==='remove' && r.targetUid===mg.uid; })){
+      toast('Already requested - '+fname(ev.hostName)+' decides.','',4500); return;
+    }
+    confirmFn=function(){ doReqRemove(mg); };
+    modal.innerHTML=confirmCard('Ask to remove “'+mg.name+'”?',
+      'Your request goes privately to '+fname(ev.hostName)+'. Nothing happens unless they approve it.',
+      'Send request');
     modal.hidden=false;
     document.body.classList.add('modal-open');
     var c=modal.querySelector('[data-confirm-yes]'); if(c) c.focus();
   }
-  function doRemoveGuest(mg){
+  function doReqRemove(mg){
+    var ev=findEvent(mg.id); if(!ev) return;
+    var sent=function(){ toast('Request sent - '+fname(ev.hostName)+' decides.','',5000); };
+    if(STORE.mode==='live' && window.D2C && D2C.requestRemoval){
+      toast('Sending…','wait',0);
+      D2C.requestRemoval(ev.id, mg.uid, mg.name).then(sent)
+        .catch(function(e){ toast((e&&e.message)||'Could not send the request','err',4500); });
+      return;
+    }
+    ev.requests=(ev.requests||[]).concat([{ reqType:'remove', uid:mg.uid, name:mg.name,
+      targetUid:mg.uid, targetName:mg.name, avatarUrl:GAV,
+      byName:loadMe().name||'A guest', docId:'' }]);
+    STORE.notify(); sent();
+  }
+  function doRemoveGuest(mg, erase){
     var ev=findEvent(mg.id); if(!ev) return;
     if(STORE.mode==='live' && window.D2C){
       toast('Removing…','wait',0);
-      (mg.uid ? D2C.banGuest(ev.id, mg.uid, mg.name) : D2C.removeGuest(ev.id, mg.name))
-        .then(function(){ toast(mg.uid?'Guest removed':'Invitation removed'); })
+      (mg.uid ? D2C.banGuest(ev.id, mg.uid, mg.name, erase) : D2C.removeGuest(ev.id, mg.name))
+        .then(function(){
+          /* an approved removal request is done with its request doc (the ban
+             usually swept it already - the doc is keyed by the target's uid) */
+          if(mg.reqDoc && D2C.declineRequest) D2C.declineRequest(ev.id, mg.reqDoc).catch(function(){});
+          toast(mg.uid?'Guest removed':'Invitation removed');
+        })
         .catch(function(e){ toast((e&&e.message)||'Could not remove','err',4500); });
       return;
     }
@@ -6488,6 +6586,14 @@ function eventDock(id){
     ev.requests=(ev.requests||[]).filter(function(r){ return !hit(r); });
     if(mg.uid && (ev.banned||[]).indexOf(mg.uid)<0)
       ev.banned=(ev.banned||[]).concat([mg.uid]);
+    if(mg.uid && erase){
+      var mine=function(u){ return u===mg.uid; };
+      ['chatMessages','messages'].forEach(function(k){
+        if(ev[k]) ev[k]=ev[k].filter(function(c){ return !mine(c.fromUid||c.from); });
+      });
+      if(ev.photos) ev.photos=ev.photos.filter(function(p){ return !mine(p.byUid); });
+      if(ev.activity) ev.activity=ev.activity.filter(function(a){ return !mine(a.personUid); });
+    }
     STORE.notify();
     toast(mg.uid?'Guest removed':'Invitation removed');
   }
@@ -6836,8 +6942,11 @@ async function createEvent(draft){
   const data  = draftDoc(draft, evRef.id, me.fsId || "");
   data.createdAt = fs.serverTimestamp();
   /* the security rules key host powers off these two - the creator's auth
-     uid now, and their proven number once (or if already) verified */
-  data.hostAuthUid = authUid();
+     uid now, and their proven number once (or if already) verified. Never
+     stamp an empty uid: rules read absent as legacy-open, present as locked,
+     so an "" stamp would lock the host out of their own event for good. */
+  const hu = authUid();
+  if(hu) data.hostAuthUid = hu;
   data.hostPhone   = (fb.auth.currentUser && fb.auth.currentUser.phoneNumber) || "";
 
   await fs.setDoc(evRef, data);
@@ -7072,6 +7181,22 @@ async function suggestInvites(eventId, list, byName){
       order: Date.now() + i, source: "request"
     })));
 }
+/* a guest privately asks the host to remove someone. The request doc carries
+   the TARGET's uid, so if the host later bans that person by any route, the
+   ban's uid sweep clears the request too. Deliberately NOT logged to the
+   activity feed - requests are visible to the host alone. */
+async function requestRemoval(eventId, targetUid, targetName){
+  const { db, fs } = await initFirebase();
+  const me = meIdent();
+  await fs.setDoc(fs.doc(fs.collection(db, ...FS_ROOT, "events", eventId, "guests")), {
+    uid: targetUid, name: targetName, avatarUrl: GAV, message: "",
+    invitedLabel: "Removal requested", isHost: false, isYou: false,
+    status: "request", reqType: "remove", targetUid: targetUid, targetName: targetName,
+    byName: me.name, byUid: me.fsId || "", authUid: authUid(),
+    order: Date.now(), source: "request"
+  });
+}
+
 async function approveRequest(eventId, docId){
   const { db, fs } = await initFirebase();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
@@ -7085,13 +7210,32 @@ async function declineRequest(eventId, docId){
   await fs.deleteDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "guests", docId));
 }
 
+/* Events written before hostAuthUid existed prove no host, so rules refuse the
+   host's deletes on guest rows their guests authored ("insufficient permissions"
+   on removing a link-joiner, while host-authored invite rows still delete).
+   Rules DO let the host update such a legacy event, so stamping hostAuthUid on
+   it upgrades it in place and every host power starts working. No-op when
+   already stamped, not signed in, or not ours (rules refuse the write). */
+async function stampHost(evRef, fs){
+  const uid = authUid(); if(!uid) return;
+  try {
+    const d = (await fs.getDoc(evRef)).data() || {};
+    if(!d.hostAuthUid) await fs.updateDoc(evRef, {
+      hostAuthUid: uid,
+      hostPhone: d.hostPhone || (fb.auth.currentUser && fb.auth.currentUser.phoneNumber) || ""
+    });
+  } catch(e){ /* someone else's event */ }
+}
+
 /* ---------------- the host removes a person ----------------
    Every row of theirs goes (uid-keyed docs plus uid-less rows under the same
    name), the counters follow, and the uid lands on the event's ban list so
-   the link stops working for them. */
-async function banGuest(eventId, uid, name){
+   the link stops working for them. erase (the popup toggle) also wipes what
+   they left behind: chat messages + their images, photos, activity rows. */
+async function banGuest(eventId, uid, name, erase){
   const { db, fs } = await initFirebase();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
+  await stampHost(evRef, fs);
   const gcol  = fs.collection(evRef, "guests");
   const [byUid, byName] = await Promise.all([
     fs.getDocs(fs.query(gcol, fs.where("uid", "==", uid))),
@@ -7104,15 +7248,50 @@ async function banGuest(eventId, uid, name){
     const v = d.data();
     if(v.uid === uid || !v.uid){ seen[d.id] = 1; dead.push(d); }  // never someone else's row
   });
+  /* one refused row must not strand the rest - deletes settle one by one and
+     only the rows that really went adjust the counters */
+  const gone = (await Promise.all(dead.map(d =>
+    fs.deleteDoc(d.ref).then(() => d, () => null)))).filter(Boolean);
   const cut = {};
-  dead.forEach(d => {
+  gone.forEach(d => {
     const s = d.data().status;
     if(/^(going|maybe|cant|pending)$/.test(s)) cut[s] = (cut[s] || 0) + 1;
   });
-  await Promise.all(dead.map(d => fs.deleteDoc(d.ref)));
   const patch = { banned: fs.arrayUnion(uid) };
   Object.keys(cut).forEach(s => { patch["counts." + s] = fs.increment(-cut[s]); });
   await fs.updateDoc(evRef, patch);
+  let denied = dead.length - gone.length;
+  if(erase) denied += await wipeGuestContent(evRef, fs, uid);
+  if(denied) throw new Error("Removed and banned, but " + denied + " of their item(s) " +
+    "stayed - this device isn't proving host rights. Verify your number in your " +
+    "profile, then remove them again.");
+}
+
+/* everything the removed person left behind, best-effort per item */
+async function wipeGuestContent(evRef, fs, uid){
+  let denied = 0;
+  try {
+    const arr = ((await fs.getDoc(evRef)).data() || {}).chatMessages || [];
+    const mine = arr.filter(m => (m.fromUid || "") === uid);
+    if(mine.length){
+      await fs.updateDoc(evRef, { chatMessages: arr.filter(m => (m.fromUid || "") !== uid) });
+      mine.forEach(m => { if(m.imagePath) deleteFile(m.imagePath); });
+    }
+  } catch(e){ denied++; }
+  const zap = async (sub, field, after) => {
+    try {
+      const s = await fs.getDocs(fs.query(fs.collection(evRef, sub), fs.where(field, "==", uid)));
+      const got = (await Promise.all(s.docs.map(d =>
+        fs.deleteDoc(d.ref).then(() => d, () => { denied++; return null; })))).filter(Boolean);
+      if(got.length && after) after(got);
+    } catch(e){ denied++; }
+  };
+  await zap("photos", "byUid", got => {
+    got.forEach(d => { const p = d.data().path; if(p) deleteFile(p); });
+    fs.updateDoc(evRef, { photoCount: fs.increment(-got.length) }).catch(() => {});
+  });
+  await zap("activity", "personUid", null);
+  return denied;
 }
 
 /* ---------------- a named viewer joins the waiting list ---------------- */
@@ -7324,7 +7503,8 @@ function mapGuest(g, id){
            invitedLabel: g.invitedLabel || "", isHost: !!g.isHost, isYou: !!g.isYou,
            status: g.status || "going", uid: g.uid || "", source: g.source || "",
            phone: g.phone || "", plus: g.plus || 0,
-           docId: id || "", reqType: g.reqType || "", byName: g.byName || "" };
+           docId: id || "", reqType: g.reqType || "", byName: g.byName || "",
+           targetUid: g.targetUid || "", targetName: g.targetName || "" };
 }
 
 function stopDetail(){ unsubDetail.forEach(u => { try{ u(); }catch(e){} }); unsubDetail = []; }
@@ -7393,7 +7573,7 @@ async function sendImage(eventId, file){
 
 window.D2C = {
   pickPhoto, sendMessage, sendImage, inviteGuests, removeGuest, banGuest,
-  requestJoin, suggestInvites, approveRequest, declineRequest,
+  requestJoin, suggestInvites, requestRemoval, approveRequest, declineRequest,
   uploadCover, deleteFile, createEvent, updateEvent, deleteEvent,
   deletePhoto, deleteMessage, editMessage,
   saveProfile, findByPhone, setRsvp, setPlus, propagateProfile, announceGuest, renameLinked,

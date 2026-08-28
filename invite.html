@@ -543,7 +543,13 @@ body.lb-open #app{overflow:hidden}
   background:#12143a;color:#fff;font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;
   box-shadow:0 14px 34px -10px rgba(10,10,50,.55);animation:trise .2s ease-out}
 .toast[hidden]{display:none}
+/* raised variant (welcome after claiming), "tup" because bare .top is the header bar:
+   rides over the finish-card avatar, just above its cam button (card centers at 50vh;
+   210 = cardH/2 - 50), instead of covering Save/Skip */
+.toast.tup{bottom:auto;top:max(calc(14px + env(safe-area-inset-top)),calc(50vh - 210px));
+  animation:tdrop .2s ease-out}
 @keyframes trise{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes tdrop{from{opacity:0;transform:translate(-50%,-10px)}to{opacity:1;transform:translate(-50%,0)}}
 .toast.err{background:#a4212a}
 .toast .spin{width:15px;height:15px;flex:none;border-radius:50%;border:2px solid rgba(255,255,255,.35);
   border-top-color:#fff;animation:tspin .7s linear infinite}
@@ -2172,7 +2178,7 @@ var _toastT=null;
 function toast(msg,kind,ms){
   var el=document.getElementById('toast'); if(!el) return;
   clearTimeout(_toastT);
-  el.className='toast'+(kind==='err'?' err':'');
+  el.className='toast'+(kind==='err'?' err':'')+(kind==='top'?' tup':'');
   el.innerHTML=(kind==='wait'?'<span class="spin"></span>':'')+h(msg);
   el.hidden=false;
   if(ms!==0) _toastT=setTimeout(function(){ el.hidden=true; }, ms||2600);
@@ -5823,7 +5829,7 @@ function eventDock(id){
     saveMe(); closeModal();
     if(STORE.mode==='live' && window.D2C && D2C.announceGuest && !m.rsvp[id])
       D2C.announceGuest(id).catch(function(){});
-    toast('Welcome, '+fname(name)+'!');
+    toast('Welcome, '+fname(name)+'!','top');
     if(pr && pr.id===id){
       var pb=document.querySelector('#rsvp button[data-k="'+pr.k+'"]');
       if(pb) rsvp(pb);

@@ -635,7 +635,9 @@ textarea.inp{height:auto;min-height:158px;padding:16px 18px 40px;line-height:1.6
 .cover-acts .ghost{justify-content:center;min-height:56px}
 
 /* date / time / select fields - a native control sits transparent on top */
-.duo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* two-up that wraps: a field drops to its own row when its text can't fit */
+.duo{display:flex;flex-wrap:wrap;gap:12px}
+.duo>div{flex:1 1 auto;min-width:0}
 .pick{position:relative;display:flex;align-items:center;gap:11px;height:64px;padding:0 14px;
   border-radius:var(--r-md);background:#fff;border:1px solid var(--line-2);
   transition:border-color .18s,box-shadow .18s}
@@ -1196,11 +1198,10 @@ button.view-all{display:block;width:100%;text-align:center}
   .sic{width:44px;height:44px;border-radius:13px}
   .sval{max-width:54%}
   .cbar-in{gap:12px}
-  .vibes{grid-template-columns:repeat(3,1fr);gap:6px}
+  .vibes{gap:6px}
   .vtile{border-radius:16px}
 }
 @media (max-width:380px){
-  .duo{grid-template-columns:1fr}
   .cbar-in>span{display:none}
 }
 @media (min-width:600px){
@@ -3238,13 +3239,13 @@ function renderCreate1(){
         '<section><h2 class="fld">Event Name</h2>' +
           '<input class="inp" id="c-title" type="text" maxlength="80" data-d="title" aria-label="Event name" ' +
             'placeholder="Pool Party" value="' + h(d.title) + '"></section>' +
-        '<section><h2 class="fld">Cover Photo</h2>' +
-          '<p class="fsub">Choose the image guests will see on your invitation.</p>' +
-          '<div id="cover-wrap">' + coverBox(d) + '</div></section>' +
+        '<section><h2 class="fld">Where?</h2>' + whereBlock(d) + '</section>' +
       '</div>' +
       '<div class="ccol">' +
         '<section><h2 class="fld">When?</h2>' + whenBlock(d) + '</section>' +
-        '<section><h2 class="fld">Where?</h2>' + whereBlock(d) + '</section>' +
+        '<section><h2 class="fld">Cover Photo</h2>' +
+          '<p class="fsub">Choose the image guests will see on your invitation.</p>' +
+          '<div id="cover-wrap">' + coverBox(d) + '</div></section>' +
       '</div>' +
     '</div></div>';
 }

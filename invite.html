@@ -472,6 +472,11 @@ a.guest:hover img,.more-g:hover{transform:scale(1.05)}
 .lb-bar button{margin-left:auto;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;
   color:#fff;background:rgba(255,255,255,.14);transition:background .18s}
 .lb-bar button:hover{background:rgba(255,255,255,.26)}
+.lb-bar button+button{margin-left:0}      /* only the first button takes the auto gap */
+.lb-bar .lb-del:hover{background:rgba(220,38,38,.55)}
+.msg .mdel{margin-left:7px;color:var(--muted-2);opacity:.65;vertical-align:middle}
+.msg .mdel svg.i{width:13px;height:13px}
+.msg .mdel:hover{color:#dc2626;opacity:1}
 .lb-stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:0 12px}
 .lb-stage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:14px;
   box-shadow:0 24px 60px -20px rgba(0,0,0,.7)}
@@ -1864,7 +1869,8 @@ function msgFrom(m){
      tie for legacy messages that carry no uid. */
   return { fromUid: m.fromUid || "", fromName: m.fromName || "Someone",
            fromAvatarUrl: m.fromAvatarUrl || "", text: m.text || "",
-           imageUrl: m.imageUrl || "", at: m.at || "",
+           imageUrl: m.imageUrl || "", imagePath: m.imagePath || "",
+           at: m.at || "", ms: m.ms || 0,
            isYou: m.fromUid ? myUids().indexOf(m.fromUid) > -1 : !!m.isYou };
 }
 
@@ -2829,7 +2835,11 @@ function renderPhotos(id){
 
 function lightbox(ev,i){
   var list=ev.photos||[], ph=list[i]; if(!ph) return '';
+  /* the host moderates everything; the photo's own uploader can pull theirs */
+  var mayDel = ev.role==='hosting' || (ph.byUid && myUids().indexOf(ph.byUid)>-1);
   return '<div class="lb-bar"><span class="cnt">'+(i+1)+' of '+list.length+'</span>'+
+      (mayDel?'<button type="button" class="lb-del" data-lb-del aria-label="Delete photo">'+
+        ico('trash')+'</button>':'')+
       '<button type="button" data-lb-close aria-label="Close photo">'+ico('x')+'</button></div>'+
     '<div class="lb-stage">'+
       '<button class="lb-arrow prev" type="button" data-lb-step="-1" aria-label="Previous photo">'+
@@ -2848,14 +2858,18 @@ function renderChat(id){
   var msgs=ev.messages||[];
   markSeen(ev.id, msgs.length);        /* viewing the thread clears the badge */
   var body = msgs.length
-    ? '<div class="thread">'+msgs.map(function(m){
+    ? '<div class="thread">'+msgs.map(function(m,mi){
+        var mayDel = ev.role==='hosting' || m.isYou;
         return '<div class="msg'+(m.isYou?' me':'')+'">'+
           (m.isYou?'':img(m.fromAvatarUrl,''))+
           '<div class="bub"><span class="who2">'+(m.isYou?'You':h(m.fromName))+'</span>'+
             (m.imageUrl?'<img class="chat-img" src="'+h(m.imageUrl)+'" data-imgview="'+h(m.imageUrl)+
               '" data-imgby="'+h(fname(m.fromName))+'" alt="Photo from '+h(fname(m.fromName))+'">':'')+
             (m.text?'<p>'+h(m.text)+'</p>':'')+
-            '<time>'+h(ago(m.at))+'</time></div>'+
+            '<time>'+h(ago(m.at))+'</time>'+
+            (mayDel?'<button class="mdel" type="button" data-mdel="'+mi+
+              '" aria-label="Delete this message">'+ico('x2')+'</button>':'')+
+          '</div>'+
         '</div>'; }).join('')+'</div>'
     : '<p class="chat-empty">No messages yet. Say hello \uD83D\uDC4B</p>';
 
@@ -4714,6 +4728,41 @@ function eventDock(id){
     var att=t.closest('#msg-attach');
     if(att){ sendImg(att.dataset.event); return; }
 
+    if(t.closest('[data-lb-del]')){
+      var dev=lbEvent, dpi=lbIdx, dph=dev && dev.photos && dev.photos[dpi];
+      if(!dph) return;
+      confirmFn=function(){
+        closeLb();
+        if(STORE.mode==='live' && window.D2C && D2C.deletePhoto && dph.id){
+          D2C.deletePhoto(dev.id, dph.id, dph.path)
+            .then(function(){ toast('Photo removed'); })
+            .catch(function(e){ toast((e&&e.message)||'Could not remove the photo','err',4500); });
+        } else {
+          dev.photos.splice(dpi,1);
+          dev.photoCount=Math.max(0,(dev.photoCount||1)-1);
+          appendLocalActivity(dev.id,'x','removed a photo');
+          STORE.notify(); toast('Photo removed');
+        }
+      };
+      modal.innerHTML=confirmCard('Delete this photo?',
+        'It comes off the event for everyone. This can’t be undone.','Delete Photo');
+      modal.hidden=false; document.body.classList.add('modal-open'); modalShown();
+      return;
+    }
+    var mdl=t.closest('[data-mdel]');
+    if(mdl){
+      var cev=findEvent(route().id), cm=cev && cev.messages && cev.messages[+mdl.dataset.mdel];
+      if(!cm) return;
+      if(STORE.mode==='live' && window.D2C && D2C.deleteMessage){
+        D2C.deleteMessage(cev.id, cm)
+          .then(function(){ toast('Message removed'); })
+          .catch(function(e){ toast((e&&e.message)||'Could not remove that','err',4000); });
+      } else {
+        cev.messages.splice(+mdl.dataset.mdel,1);
+        STORE.notify(); toast('Message removed');
+      }
+      return;
+    }
     var addp=t.closest('[data-addphoto]');
     if(addp){
       var aev=findEvent(addp.dataset.addphoto);
@@ -6386,7 +6435,7 @@ async function initFirebase(){
        for all writes, so staying signed-out means "permission denied" */
     if(!fb.auth.currentUser){
       try { const c = await fb.au.signInAnonymously(fb.auth); fb.uid = c.user.uid; }
-      catch(e){}
+      catch(e){ authDown(); }
     }
     return fb;
   }
@@ -6428,9 +6477,18 @@ async function initFirebase(){
   } catch(e){
     warn("auth unavailable (" + e.code + ") - continuing unauthenticated");
   }
+  if(!uid) authDown();
 
   fb = { app, db, storage, auth, au, uid, fs, st };
   return fb;
+}
+/* signed-out clients fail every write under the rules - say so loudly ONCE
+   instead of letting each action die with a cryptic permission error */
+function authDown(){
+  if(window.__authWarned || typeof window.toast !== "function") return;
+  window.__authWarned = true;
+  toast("Saving is off - sign-in failed. In Firebase: Authentication → Sign-in method → enable Anonymous.",
+        "err", 9000);
 }
 
 /* The seeder, connection panel, and read tests live in debug.html now - a
@@ -6603,6 +6661,36 @@ async function createEvent(draft){
   ok("event created: " + FS_ROOT.join("/") + "/events/" + evRef.id +
      " with " + invited.length + " invited");
   return evRef.id;
+}
+
+/* ---------------- content moderation ----------------
+   Rules let the photo's author or the event host delete; chat lives on the
+   event doc, whose chatMessages field every signed-in client may rewrite. */
+async function deletePhoto(eventId, photoId, path){
+  const { db, fs } = await initFirebase();
+  await fs.deleteDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "photos", photoId));
+  await fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", eventId),
+    { photoCount: fs.increment(-1) }).catch(() => {});
+  if(path) deleteFile(path);
+  logActivity(eventId, "x", "removed a photo");
+}
+async function deleteMessage(eventId, m){
+  const { db, fs } = await initFirebase();
+  const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
+  const snap = await fs.getDoc(evRef);
+  const arr = (snap.data() || {}).chatMessages || [];
+  let hit = -1;
+  for(let i = arr.length - 1; i >= 0; i--){
+    const c = arr[i];
+    if((m.ms && c.ms === m.ms) ||
+       (!m.ms && c.at === m.at && (c.fromUid || "") === m.fromUid &&
+        (c.text || "") === m.text && (c.imageUrl || "") === m.imageUrl)){ hit = i; break; }
+  }
+  if(hit < 0) throw new Error("That message is already gone.");
+  const dead = arr[hit];
+  arr.splice(hit, 1);
+  await fs.updateDoc(evRef, { chatMessages: arr });
+  if(dead.imagePath) deleteFile(dead.imagePath);
 }
 
 /* ---------------- 5. edit / delete ---------------- */
@@ -6995,8 +7083,9 @@ async function watchDetail(id){
   unsubDetail.push(fs.onSnapshot(fs.query(fs.collection(...base, "photos"), fs.orderBy("order", "desc")),
     snap => STORE.setDetail(id, { photos: snap.docs.map(d => {
       const p = d.data();
-      return { url: p.url, thumbUrl: p.thumbUrl || p.url, byName: p.byName || "Someone",
-               byAvatarUrl: p.byAvatarUrl || "", whenLabel: p.whenLabel || "" };
+      return { id: d.id, url: p.url, thumbUrl: p.thumbUrl || p.url, byName: p.byName || "Someone",
+               byAvatarUrl: p.byAvatarUrl || "", whenLabel: p.whenLabel || "",
+               byUid: p.byUid || "", path: p.path || "" };
     })}), e => err("photos: " + e.code)));
 
   /* order desc: seeds count down from the list length, app entries use
@@ -7087,6 +7176,7 @@ window.D2C = {
   pickPhoto, sendMessage, sendImage, inviteGuests, removeGuest, banGuest,
   requestJoin, suggestInvites, approveRequest, declineRequest,
   uploadCover, deleteFile, createEvent, updateEvent, deleteEvent,
+  deletePhoto, deleteMessage,
   saveProfile, findByPhone, setRsvp, setPlus, propagateProfile, announceGuest, renameLinked,
   smsSend, smsCheck, smsAbort, smsReady: () => KEY_OK,
   smsPending: () => smsConf ? smsTo : "",     // E.164 a code is out to, else ""

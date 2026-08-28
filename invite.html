@@ -680,6 +680,10 @@ textarea.inp{height:auto;min-height:158px;padding:16px 18px 40px;line-height:1.6
 .vibe-show .vtile{border-radius:16px}
 .vibe-show .vibe:hover .vtile{transform:none}
 .vibe-show .vibe>span:last-child{font-size:12px;color:var(--ink-soft)}
+/* a Custom tile with a note behind it reads as tappable */
+.vibe-show .vcust{cursor:pointer}
+.vibe-show .vcust>span:last-child{color:var(--primary);font-weight:600}
+.vibe-show .vcust:hover .vtile{transform:scale(1.05)}
 
 /* settings rows */
 .scard{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:0 16px;
@@ -697,10 +701,18 @@ textarea.inp{height:auto;min-height:158px;padding:16px 18px 40px;line-height:1.6
 
 /* ---- step 3: expanded settings cards ---- */
 .sec3{padding:0 14px}
-.sec3>.srow{width:100%;text-align:left;cursor:pointer}
+.sec3>.srow{width:100%;text-align:left}
 .sec3>.srow>b{flex:1 1 auto;min-width:0}
 .sec3>.srow .sval{flex:0 1 auto;min-width:0;max-width:none}
 .sec3>.srow .cv{transition:transform .2s}
+/* dual-speed header: the invisible quick-pick covers everything except the
+   expander strip, so a tap changes the value and the arrow opens the card */
+.sec3>.qrow{padding-right:50px}
+.sec3>.qrow select,.sec3>.qrow input[type=date]{width:calc(100% - 50px);cursor:pointer}
+.sec3.open>.qrow select,.sec3.open>.qrow input[type=date]{display:none}
+.xpd{position:absolute;top:0;right:-14px;bottom:0;width:56px;display:grid;place-items:center;
+  color:var(--muted);border-left:1px solid var(--line);border-radius:0;transition:color .15s}
+.xpd:hover{color:var(--primary)}
 .sec3.open>.srow .cv{transform:rotate(-90deg)}
 .secb{display:none;padding:2px 0 16px}
 .sec3.open>.secb{display:block}
@@ -1025,6 +1037,7 @@ button.view-all{display:block;width:100%;text-align:center}
 .claim-row span{margin-left:auto;font-size:13px;color:var(--muted-2);flex:none}
 .claim-or{display:flex;align-items:center;gap:12px;margin:8px 0 12px;color:var(--muted-2);font-size:13px}
 .claim-or::before,.claim-or::after{content:"";flex:1;height:1px;background:var(--line)}
+.modal-card .tawrap .inp{padding-right:64px}
 .modal-card .addbox .inp{height:54px}
 .modal-card .addbtn{width:50px;height:54px}
 .claim-row.inv:hover{background:none}
@@ -1854,7 +1867,7 @@ function docToModel(id, d){
     time: (d.time || "").replace(/–/g, "-"),
     timeSort: d.timeSort != null ? d.timeSort : t24(d.time || ""),
     venue: d.venue || "", address: d.address || "", about: d.about || "",
-    vibe: d.vibe || "Chill", vibes: d.vibes || [],
+    vibe: d.vibe || "Chill", vibes: d.vibes || [], vibeCustom: d.vibeCustom || "",
     capacity: d.capacity || "-", capacityMode: d.capacityMode || "", capacityMax: d.capacityMax || 0,
     entry: d.entry || "-", entryMode: d.entryMode || "", entryNote: d.entryNote || "",
     inviteType: d.inviteType || "Invite only",
@@ -1893,7 +1906,7 @@ function seedToModel(ev){
     id: ev.id, slug: ev.id,
     title: ev.title, dateISO: ev.date, time: ev.time, timeSort: t24(ev.time),
     venue: ev.venue, address: ev.address, about: ev.about,
-    vibe: ev.vibe, capacity: ev.capacity, entry: ev.entry, inviteType: ev.invite,
+    vibe: ev.vibe, vibeCustom: '', capacity: ev.capacity, entry: ev.entry, inviteType: ev.invite,
     join: ev.vis === 'public' ? 'public'
         : /^invite only$/i.test(ev.invite || '') ? 'guests' : 'open',
     banned: [],
@@ -2403,8 +2416,14 @@ function vibeShow(ev){
   if(!keys.length) return '';
   return '<div class="vibe-show">'+keys.map(function(k){
     var v=VIBE_BY[k];
-    return '<span class="vibe"><span class="vtile" style="background:'+v.bg+';color:'+v.fg+'">'+
-      '<svg aria-hidden="true"><use href="#'+v.ic+'"/></svg></span><span>'+h(v.k)+'</span></span>';
+    var inner='<span class="vtile" style="background:'+v.bg+';color:'+v.fg+'">'+
+      '<svg aria-hidden="true"><use href="#'+v.ic+'"/></svg></span><span>'+h(v.k)+'</span>';
+    /* the Custom tile opens the host's note - only when they wrote one, so
+       events from before this feature stay plain display tiles */
+    if(k==='Custom' && ev.vibeCustom)
+      return '<button class="vibe vcust" type="button" data-vibeinfo="'+h(ev.id)+
+        '" aria-label="Read the custom vibe">'+inner+'</button>';
+    return '<span class="vibe">'+inner+'</span>';
   }).join('')+'</div>';
 }
 function renderEvent(id){
@@ -2910,7 +2929,7 @@ function blankDraft(){
   var start = addDays(isoOf(new Date()), 7);
   var d = { draftId:'', title:'', coverUrl:'', coverPath:'',
            date:start, time:'7:00 PM', endTime:null,
-           venue:'', address:'', about:'', vibes:[],
+           venue:'', address:'', about:'', vibes:[], vibeCustom:'',
            /* step 3 - 'open' is the first-time default */
            capMode:'custom', capacity:30,
            join:'open',
@@ -2937,6 +2956,7 @@ function loadDraft(){
   /* an object URL from a previous session is dead - drop the preview */
   if(/^blob:/.test(DRAFT.coverUrl) && !DRAFT.coverPath) DRAFT.coverUrl = '';
   if(!Array.isArray(DRAFT.vibes)) DRAFT.vibes = [];
+  if(typeof DRAFT.vibeCustom !== 'string') DRAFT.vibeCustom = '';
   if(!Array.isArray(DRAFT.reminders)) DRAFT.reminders = [];
   if(!Array.isArray(DRAFT.invitees)) DRAFT.invitees = [];
   if(!Array.isArray(DRAFT.extra)) DRAFT.extra = [];
@@ -2983,23 +3003,21 @@ function draftMapQuery(d){
 /* ---------- step chrome ---------- */
 function createHead(step){
   var bars = '';
-  for(var n = 1; n <= 4; n++) bars += '<i' + (n <= step ? ' class="on"' : '') + '></i>';
+  for(var n = 1; n <= 3; n++) bars += '<i' + (n <= step ? ' class="on"' : '') + '></i>';
   return '<header class="chead">' +
       '<button class="icon-btn" type="button" data-cback aria-label="Back">' + ico('back') + '</button>' +
       '<span class="logo">DOWN<i>2</i>CHILL</span>' +
       '<button class="draft" type="button" data-savedraft>Save Draft</button>' +
     '</header>' +
-    '<p class="csteps">Step ' + step + ' of 4</p>' +
-    '<div class="pbar" role="progressbar" aria-label="Progress" aria-valuemin="1" aria-valuemax="4" ' +
+    '<p class="csteps">Step ' + step + ' of 3</p>' +
+    '<div class="pbar" role="progressbar" aria-label="Progress" aria-valuemin="1" aria-valuemax="3" ' +
       'aria-valuenow="' + step + '">' + bars + '</div>';
 }
 function createFoot(step){
-  if(step === 4) return inviteFoot();
-  var cta = step === 1 ? ['data-cnext','Continue']
-          : step === 2 ? ['data-cnext2','Continue']
-          :              ['data-cnext3','Continue'];
+  if(step >= 3) return inviteFoot();
+  var cta = step === 1 ? ['data-cnext','Continue'] : ['data-cnext2','Continue'];
   return '<div class="cbar-foot"><div class="cbar-in">' +
-      '<span>Step ' + step + ' of 4</span>' +
+      '<span>Step ' + step + ' of 3</span>' +
       '<button class="cta" type="button" id="c-cta" ' + cta[0] + '>' + cta[1] + ico('chev') + '</button>' +
     '</div></div>';
 }
@@ -3088,6 +3106,8 @@ function vibeGrid(d){
         '</span><span>' + h(v.k) + '</span></button>';
   }).join('') + '</div>';
 }
+/* Steps 2 and 3 merged: About + Vibe up top, then every settings card in its
+   compact quick-pick form. The chevron on a card opens the full editor. */
 function renderCreate2(){
   var d = loadDraft();
   return '<div class="wrap">' + createHead(2) +
@@ -3102,13 +3122,9 @@ function renderCreate2(){
           '</div></section>' +
         '<section><h2 class="fld">Vibe</h2>' +
           '<p class="fsub">Help guests know what to expect. Pick as many as fit.</p>' + vibeGrid(d) + '</section>' +
-        '<section><h2 class="fld">Guest Settings</h2>' +
-          '<p class="fsub">The essentials - step 3 opens every option.</p>' +
-          step2Settings(d) + '</section>' +
-        '<section><h2 class="fld">Reminders</h2>' +
-          '<p class="fsub">Keep your guests in the loop.</p>' +
-          step2Reminders(d) + '</section>' +
-    '</div></div>';
+    '</div>' +
+    '<div class="cgrid c3">' + step3Body() + '</div>' +
+  '</div>';
 }
 
 /* ================= STEP 3 - guest settings & reminders =================
@@ -3140,8 +3156,10 @@ var RSVP_OPTS = [
 var UNIT_MIN = { Minutes:1, Hours:60, Days:1440, Weeks:10080 };
 var REM_PRESETS = [ ['10080','1 Week Before'], ['1440','1 Day Before'], ['60','1 Hour Before'] ];
 
-/* which cards are folded open - view state, not part of the draft */
-var SEC_OPEN = { cap:1, join:1, plus:1, rsvp:1, entry:1, rem:1 };
+/* which cards are folded open - view state, not part of the draft. All start
+   CLOSED: the quick-pick header handles the common cases, the chevron opens
+   the full editor for anyone who wants every option. */
+var SEC_OPEN = { cap:0, join:0, plus:0, rsvp:0, entry:0, rem:0 };
 
 /* ---------- derived labels: one value, two presentations ---------- */
 function capLabel(d){ return d.capMode === 'unlimited' ? 'Unlimited' : d.capacity + ' guests'; }
@@ -3205,20 +3223,36 @@ function chkRow(key, label, on){
   return '<button class="chk' + (on ? ' on' : '') + '" type="button" role="checkbox" aria-checked="' + on + '" ' +
       'data-rem="' + key + '"><span class="cbx">' + ico('tick') + '</span><span>' + h(label) + '</span></button>';
 }
-function secCard(key, icon, label, value, body){
+/* One card, two speeds. Collapsed: the header carries a native quick-pick
+   (the old step-2 select) for the common choices. The chevron at the right
+   edge expands the full step-3 editor; while open, the quick-pick hides so
+   there is exactly one control per setting on screen. */
+function secCard(key, icon, label, value, body, quick){
   var open = !!SEC_OPEN[key];
   return '<div class="scard sec3' + (open ? ' open' : '') + '">' +
-      '<button class="srow" type="button" data-sec="' + key + '" aria-expanded="' + open + '">' +
+      '<div class="srow qrow">' +
         '<span class="sic">' + ico(icon) + '</span><b>' + h(label) + '</b>' +
-        '<span class="sval">' + h(value) + '</span>' + ico('chev','cv') +
-      '</button>' +
+        '<span class="sval">' + h(value) + '</span>' +
+        (quick || '') +
+        '<button class="xpd" type="button" data-sec="' + key + '" aria-expanded="' + open +
+          '" aria-label="' + (open ? 'Fewer' : 'All') + ' ' + h(label) + ' options">' +
+          ico('chev','cv') + '</button>' +
+      '</div>' +
       '<div class="secb">' + body + '</div>' +
     '</div>';
+}
+/* the quick-pick: same draft fields the full editor writes, common values only */
+function quickSel(key, label, value, opts){
+  return '<select data-p2="' + key + '" aria-label="' + h(label) + '">' +
+    opts.map(function(o){
+      return '<option' + (o === value ? ' selected' : '') + '>' + h(o) + '</option>';
+    }).join('') + '</select>';
 }
 
 /* ---------- the seven cards ---------- */
 function cardCapacity(d){
   return secCard('cap','users','Maximum Guests', capLabel(d),
+    /* body */
     '<div class="opts" role="radiogroup" aria-label="Maximum Guests">' +
       optRow('capMode','unlimited', d.capMode === 'unlimited', 'Unlimited', 'No guest limit.') +
       optRow('capMode','custom',    d.capMode === 'custom',    'Custom',    'Set a maximum number of guests.') +
@@ -3228,7 +3262,9 @@ function cardCapacity(d){
         '<p class="onote">Tap the number to type an exact limit.</p>' +
         '<p class="onote">The host and co-hosts do not count toward capacity.</p>' +
         '<p class="onote">Suggested range: 2-500 guests.</p>'
-      : ''));
+      : ''),
+    quickSel('cap','Maximum Guests', capLabel(d),
+      withCurrent(['Unlimited','10 guests','20 guests','30 guests','50 guests','100 guests'], capLabel(d))));
 }
 function cardJoin(d){
   return secCard('join','mail','Who Can Join', joinOpt(d.join).lab,
@@ -3238,7 +3274,9 @@ function cardJoin(d){
       }).join('') +
     '</div>' +
     '<p class="onote">Whoever joins, you stay in charge - you can remove any guest, ' +
-      'and requests wait for your approval.</p>');
+      'and requests wait for your approval.</p>',
+    quickSel('join','Who Can Join', joinOpt(d.join).lab,
+      JOIN_OPTS.map(function(o){ return o.lab; })));
 }
 function cardPlus(d){
   return secCard('plus','user-plus','Plus Ones', plusLabel(d),
@@ -3248,7 +3286,9 @@ function cardPlus(d){
       optRow('plusMode','custom',d.plusMode === 'custom','Custom Limit', 'Set how many additional guests each invitee can bring.') +
     '</div>' +
     (d.plusMode === 'custom' ? stepper('plusN', d.plusN) : '') +
-    '<p class="onote">Plus ones count toward the event\u2019s maximum capacity.</p>');
+    '<p class="onote">Plus ones count toward the event\u2019s maximum capacity.</p>',
+    quickSel('plus','Plus Ones', plusLabel(d),
+      withCurrent(['Not allowed','Allowed','+2 each','+3 each'], plusLabel(d))));
 }
 function cardRsvp(d){
   return secCard('rsvp','cal-p','RSVP Deadline', rsvpLabel(d),
@@ -3261,7 +3301,9 @@ function cardRsvp(d){
       ? '<div class="pick datebox">' + ico('cal-p') + '<b>' + h(dateLabel(rsvpDate(d))) + '</b>' +
         '<input type="date" id="c-rsvp" value="' + h(rsvpDate(d)) + '" min="' + isoOf(new Date()) +
         '" max="' + h(d.date) + '" aria-label="RSVP deadline"></div>'
-      : ''));
+      : ''),
+    '<input type="date" id="c-rsvp2" value="' + h(rsvpDate(d) || d.date) + '" min="' + isoOf(new Date()) +
+      '" max="' + h(d.date) + '" aria-label="RSVP deadline">');
 }
 function cardEntry(d){
   return secCard('entry','dollar','Entry Cost', entryLabel(d),
@@ -3275,7 +3317,9 @@ function cardEntry(d){
       ? '<div class="tawrap"><input class="inp" id="c-entry" type="text" maxlength="80" data-d="entryNote" ' +
         'aria-label="Entry cost information" placeholder="$10 at the door" value="' + h(d.entryNote) + '">' +
         '<span class="count" id="c-entrycount">' + d.entryNote.length + ' / 80</span></div>'
-      : ''));
+      : ''),
+    quickSel('entry','Entry Cost', entryLabel(d),
+      withCurrent(['Free','Pay at event'], entryLabel(d))));
 }
 function cardReminders(d){
   var custom = hasCustomRem(d), none = !d.reminders.length;
@@ -3317,13 +3361,15 @@ function cardReminders(d){
       '<button class="sw' + (d.notifyChanges ? ' on' : '') + '" type="button" role="switch" ' +
       'aria-checked="' + d.notifyChanges + '" data-notify aria-label="Notify guests when event details change">' +
       '<i></i></button></div>' +
-    '<p class="onote pad">Reminders and change alerts are delivered by the Down2Chill app - guests without it won’t receive them yet.</p>');
+    '<p class="onote pad">Reminders and change alerts are delivered by the Down2Chill app - guests without it won’t receive them yet.</p>',
+    quickSel('rem','Reminder Settings', remSummary(d),
+      withCurrent(['None','1 week before','1 day before','1 hour before'], remSummary(d))));
 }
 
 function step3Body(){
   var d = loadDraft();
   return '<section class="full"><h2 class="fld">Guest Settings</h2>' +
-      '<p class="fsub">Set the details and preferences for your event.</p></section>' +
+      '<p class="fsub">Tap a row for the common choices - the arrow opens every option.</p></section>' +
     '<div class="s3cards">' +
       cardJoin(d) + cardCapacity(d) + cardPlus(d) + cardRsvp(d) + cardEntry(d) +
     '</div>' +
@@ -3331,53 +3377,12 @@ function step3Body(){
       '<p class="fsub">Keep your guests in the loop.</p></section>' +
     '<div class="full">' + cardReminders(d) + '</div>';
 }
-function renderCreate3(){
-  return '<div class="wrap">' + createHead(3) +
-    '<div class="cgrid c3">' + step3Body() + '</div></div>';
-}
 
-/* ---------- step 2's compact rows -------------------------------------
-   Same draft fields step 3 edits, just narrowed to the common choices, so
-   whatever is picked here is already selected when step 3 opens. A value
-   only step 3 can produce (a custom entry note, several reminders) is kept
-   in the list as its own option instead of being clobbered.
-   -------------------------------------------------------------------- */
+/* A value only the full editor can produce (a custom entry note, several
+   reminders) stays in the quick list as its own option instead of being
+   clobbered. */
 function withCurrent(opts, cur){
   return opts.indexOf(cur) > -1 ? opts : [cur].concat(opts);
-}
-function p2Row(key, icon, label, value, opts){
-  return '<div class="srow">' +
-      '<span class="sic">' + ico(icon) + '</span><b>' + h(label) + '</b>' +
-      '<span class="sval">' + h(value) + '</span>' + ico('chev','cv') +
-      '<select data-p2="' + key + '" aria-label="' + h(label) + '">' +
-        opts.map(function(o){
-          return '<option' + (o === value ? ' selected' : '') + '>' + h(o) + '</option>';
-        }).join('') +
-      '</select>' +
-    '</div>';
-}
-function step2Settings(d){
-  return '<div class="scard" id="p2-set">' +
-      p2Row('cap','users','Maximum Guests', capLabel(d),
-        withCurrent(['Unlimited','10 guests','20 guests','30 guests','50 guests','100 guests'], capLabel(d))) +
-      p2Row('join','mail','Who Can Join', joinOpt(d.join).lab,
-        JOIN_OPTS.map(function(o){ return o.lab; })) +
-      p2Row('plus','user-plus','Plus Ones', plusLabel(d),
-        withCurrent(['Not allowed','Allowed','+2 each','+3 each'], plusLabel(d))) +
-      '<div class="srow"><span class="sic">' + ico('cal-p') + '</span><b>RSVP Deadline</b>' +
-        '<span class="sval">' + h(rsvpLabel(d)) + '</span>' + ico('chev','cv') +
-        '<input type="date" id="c-rsvp2" value="' + h(rsvpDate(d) || d.date) + '" min="' + isoOf(new Date()) +
-        '" max="' + h(d.date) + '" aria-label="RSVP deadline">' +
-      '</div>' +
-      p2Row('entry','dollar','Entry Cost', entryLabel(d),
-        withCurrent(['Free','Pay at event'], entryLabel(d))) +
-    '</div>';
-}
-function step2Reminders(d){
-  return '<div class="scard" id="p2-rem">' +
-      p2Row('rem','bell','Reminder Settings', remSummary(d),
-        withCurrent(['None','1 week before','1 day before','1 hour before'], remSummary(d))) +
-    '</div>';
 }
 function applyP2(key, v){
   var d = loadDraft();
@@ -3834,7 +3839,7 @@ function groupName(k){
   return 'Suggested';
 }
 function renderCreate4(){
-  return '<div class="wrap">' + createHead(4) +
+  return '<div class="wrap">' + createHead(3) +
     '<h1 class="title">Invite Guests</h1>' +
     '<div class="cgrid c4" id="c4">' + inviteBody() + '</div></div>';
 }
@@ -3844,7 +3849,7 @@ function inviteFoot(){
       (n ? '<span class="fsel">' + inviteStack(d) +
             '<span class="ftx"><b>' + n + (n === 1 ? ' guest selected' : ' guests selected') + '</b>' +
             '<span>Invitations send when the event is created.</span></span></span>'
-         : '<span>Step 4 of 4</span>') +
+         : '<span>Step 3 of 3</span>') +
       '<button class="cta" type="button" id="c-cta" data-cinvite>' +
         (n ? 'Invite Guests' : 'Create Event') + ico('chev') + '</button>' +
     '</div></div>';
@@ -3873,6 +3878,7 @@ function eventToDraft(ev){
   d.venue = ev.venue; d.address = ev.address; d.about = ev.about;
   d.coverUrl = ev.coverUrl || ''; d.coverPath = ev.coverPath || '';
   d.vibes = (ev.vibes && ev.vibes.length) ? ev.vibes.slice() : [];
+  d.vibeCustom = ev.vibeCustom || '';
   d.capMode  = ev.capacityMode || (/unlimited|no limit/i.test(ev.capacity || '') ? 'unlimited' : 'custom');
   d.capacity = ev.capacityMax || numOf(ev.capacity, 30);
   d.join     = joinMode(ev);
@@ -3919,6 +3925,7 @@ function basicsPatch(d){
             timeSort: t24(d.time),
             venue: d.venue.trim(), address: d.address.trim(), about: d.about.trim(),
             vibe: d.vibes.length ? d.vibes.join(' · ') : 'Chill', vibes: d.vibes.slice(),
+            vibeCustom: d.vibeCustom || '',
             tz: hostZone(),
             coverPath: d.coverPath || '', coverUrl: cover, thumbUrl: cover };
   if(d.vibes.length) p.dot = vibeDot(d.vibes);   /* keep the old dot otherwise */
@@ -4086,6 +4093,7 @@ function draftBase(d, id, hostUid){
     dateISO: d.date, time: when, timeSort: t24(d.time),
     venue: d.venue.trim(), address: d.address.trim(), about: d.about.trim(),
     vibe: d.vibes.length ? d.vibes.join(' \u00B7 ') : 'Chill', vibes: d.vibes.slice(),
+    vibeCustom: d.vibeCustom || '',
     tz: hostZone(),
     dot: vibeDot(d.vibes), role: 'hosting',
     /* a blob: preview is session-local - never let one into the document */
@@ -4464,7 +4472,10 @@ function eventDock(id){
     if(parts[0]==='photos') return {v:'photos', id:parts[1]};
     if(parts[0]==='chat')   return {v:'chat',   id:parts[1]};
     if(parts[0]==='calendar') return {v:'calendar'};
-    if(parts[0]==='create') return {v:'create', step: +parts[1] >= 2 && +parts[1] <= 4 ? +parts[1] : 1};
+    if(parts[0]==='create'){       /* old 4-step links: settings merged into 2, invites = 3 */
+      var cs = +parts[1] || 1; if(cs === 4) cs = 3;
+      return {v:'create', step: cs >= 2 && cs <= 3 ? cs : 1};
+    }
     if(parts[0]==='edit') return {v:'edit', id:parts[1]};
     if(parts[0]==='profile') return {v:'profile'};
     return {v:'home'};
@@ -4527,8 +4538,7 @@ function eventDock(id){
     else if(r.v==='photos'){   app.innerHTML=renderPhotos(r.id);chrome.innerHTML=''; }
     else if(r.v==='profile'){  app.innerHTML=renderProfile();  chrome.innerHTML=bottomNav('profile'); }
     else if(r.v==='edit'){     app.innerHTML=renderEditPage(); chrome.innerHTML=editFoot(); }
-    else if(r.v==='create'){   app.innerHTML=r.step===4?renderCreate4()
-                                              :r.step===3?renderCreate3()
+    else if(r.v==='create'){   app.innerHTML=r.step>=3?renderCreate4()
                                               :r.step===2?renderCreate2():renderCreate1();
                                chrome.innerHTML=createFoot(r.step); }
     else {                     app.innerHTML=renderGuests(r.id);chrome.innerHTML=''; }
@@ -4666,7 +4676,6 @@ function eventDock(id){
       saveDraft(); swapHash('#create/2'); return;
     }
     if(t.closest('[data-cnext2]')){ saveDraft(); swapHash('#create/3'); return; }
-    if(t.closest('[data-cnext3]')){ saveDraft(); swapHash('#create/4'); return; }
     if(t.closest('[data-editcancel]')){ leaveEdit(); return; }
     var esave=t.closest('[data-editsave]');
     if(esave){ commitEdit(esave); return; }
@@ -4961,8 +4970,34 @@ function eventDock(id){
     var vb=t.closest('[data-vibe]');
     if(vb){
       var vd=loadDraft(), at=vd.vibes.indexOf(vb.dataset.vibe);
-      if(at>-1) vd.vibes.splice(at,1); else vd.vibes.push(vb.dataset.vibe);
+      if(at>-1){ vd.vibes.splice(at,1); saveDraft(); repaintVibes(); return; }
+      /* Custom asks for its text before it turns on; active Custom just
+         toggles off like any other tile (the text is kept for next time) */
+      if(vb.dataset.vibe==='Custom'){ openVibeEdit(); return; }
+      vd.vibes.push(vb.dataset.vibe);
       saveDraft(); repaintVibes(); return;
+    }
+    if(t.closest('[data-cvibe-save]')){
+      var cvi=document.getElementById('cv-in'), cdd=loadDraft();
+      cdd.vibeCustom=(cvi&&cvi.value.trim())||'';
+      if(cdd.vibes.indexOf('Custom')<0) cdd.vibes.push('Custom');
+      saveDraft(); closeModal(); repaintVibes(); return;
+    }
+    var vinf=t.closest('[data-vibeinfo]');
+    if(vinf){
+      var vev=findEvent(vinf.dataset.vibeinfo);
+      if(vev && vev.vibeCustom){
+        modal.innerHTML='<div class="modal-card claim">'+
+          '<button class="modal-x" type="button" data-modal-close aria-label="Close">'+ico('x')+'</button>'+
+          '<div class="modal-ic"><svg aria-hidden="true" style="width:36px;height:36px">'+
+            '<use href="#v-custom"/></svg></div>'+
+          '<h3 id="modal-h">Custom vibe</h3>'+
+          '<p>'+h(vev.vibeCustom)+'</p>'+
+          '<button class="modal-cta" type="button" data-modal-close>Got it</button>'+
+        '</div>';
+        modal.hidden=false; document.body.classList.add('modal-open'); modalShown();
+      }
+      return;
     }
 
     var backEl=t.closest('[data-back]');
@@ -5109,6 +5144,10 @@ function eventDock(id){
     if(e.key==='Enter' && e.target.id==='msg-in'){ e.preventDefault(); sendMsg(e.target.dataset.event); }
     if(e.key==='Enter' && e.target.id==='c-add'){ e.preventDefault(); commitAdd(true); }
     if(e.key==='Enter' && e.target.id==='inv-add'){ e.preventDefault(); commitInvite(true); }
+    if(e.key==='Enter' && e.target.id==='cv-in'){
+      e.preventDefault();
+      var cvb=document.querySelector('[data-cvibe-save]'); if(cvb) cvb.click();
+    }
     /* spans/divs with role="button" don't click from the keyboard on their own */
     if((e.key==='Enter'||e.key===' ') && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)){
       var rb=e.target.closest && e.target.closest('[role="button"]');
@@ -5119,6 +5158,11 @@ function eventDock(id){
   document.addEventListener('input',function(e){
     var mk=e.target.getAttribute && e.target.getAttribute('data-me');
     if(mk){ loadMe()[mk]=e.target.value; return; }
+    if(e.target.id==='cv-in'){
+      var cvc=document.getElementById('cv-count');
+      if(cvc) cvc.textContent=e.target.value.length+' / 80';
+      return;
+    }
     var dk=e.target.getAttribute && e.target.getAttribute('data-d');
     if(dk){
       loadDraft()[dk]=e.target.value; saveDraft();
@@ -5231,6 +5275,27 @@ function eventDock(id){
     modal.innerHTML=infoCard(); modal.hidden=false;
     document.body.classList.add('modal-open');
     modalShown();
+  }
+  /* the Custom vibe's text - set when the tile is first switched on, and
+     editable any time by toggling it off and on again */
+  function openVibeEdit(){
+    var d=loadDraft();
+    modal.innerHTML='<div class="modal-card claim">'+
+      '<button class="modal-x" type="button" data-modal-close aria-label="Close">'+ico('x')+'</button>'+
+      '<div class="modal-ic"><svg aria-hidden="true" style="width:36px;height:36px">'+
+        '<use href="#v-custom"/></svg></div>'+
+      '<h3 id="modal-h">Custom vibe</h3>'+
+      '<p>Name it yourself - guests can tap the Custom tile on the event page to read it.</p>'+
+      '<div class="tawrap"><input class="inp" id="cv-in" type="text" maxlength="80" '+
+        'placeholder="Bring board games + fuzzy socks" value="'+h(d.vibeCustom||'')+'">'+
+        '<span class="count" id="cv-count">'+(d.vibeCustom||'').length+' / 80</span></div>'+
+      '<button class="modal-cta" type="button" data-cvibe-save>Set vibe</button>'+
+      '<button class="modal-later" type="button" data-modal-close>Cancel</button>'+
+    '</div>';
+    modal.hidden=false; document.body.classList.add('modal-open');
+    modalShown();
+    var iv=document.getElementById('cv-in');
+    if(iv){ iv.focus(); iv.select(); }
   }
   promptVerify = function(){
     if(!modal.hidden) return;
@@ -5578,17 +5643,13 @@ function eventDock(id){
     if(!box) return;
     var a=document.activeElement, id=a&&a.id, at=a&&a.selectionStart;
     box.innerHTML=inviteBody();
-    chrome.innerHTML=createFoot(4);
+    chrome.innerHTML=createFoot(3);
     if(id==='q-invite'||id==='c-msg'||id==='c-add'){
       var el=document.getElementById(id);
       if(el){ el.focus(); try{ el.setSelectionRange(at,at); }catch(e){} }
     }
   }
-  function repaintP2(){
-    var d=loadDraft(), a=document.getElementById('p2-set'), b=document.getElementById('p2-rem');
-    if(a) a.outerHTML=step2Settings(d);
-    if(b) b.outerHTML=step2Reminders(d);
-  }
+  function repaintP2(){ repaintStep3(); }   /* the quick picks live in the cards now */
   var STEP_LIMITS={capacity:[2,500],plusN:[1,10],remN:[1,60]};
   function bumpStep(field,dir){
     var d=loadDraft(), lim=STEP_LIMITS[field];

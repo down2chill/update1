@@ -4,16 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#8ea0fc">
-<title>Down2Chill</title>
-<!-- Google Tag Manager -->
-<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','GTM-PQT7FLMV');</script>
-<!-- End Google Tag Manager -->
-<link rel="canonical" href="https://down2chill.com/invite">
-<link rel="manifest" href="/manifest.json">
+<title>D2C Debug</title>
 <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -31,7 +22,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <style>
 :root{
   --bg:#f7f7fb; --card:#fff; --ink:#000042; --ink-soft:#2a2c63;
-  --muted:#70748f; --muted-2:#8a8da6;   /* dark enough for AA at small sizes */
+  --muted:#8b8fa8; --muted-2:#a4a7bd;
   --primary:#4038f0; --primary-ink:#4b46d6; --soft:#efeefd;
   --line:#e5e4f4; --line-2:#dfddf7;
   --blue:#2b6cf6; --blue-bg:#e6eefd; --green:#16a34a;
@@ -481,6 +472,35 @@ a.guest:hover img,.more-g:hover{transform:scale(1.05)}
 .lb-cap img{width:28px;height:28px;border-radius:50%}
 .lb-cap span{opacity:.7}
 body.lb-open #app{overflow:hidden}
+
+/* ---- firebase debug page ---- */
+.fb-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:18px;margin-bottom:14px}
+.fb-card h3{margin:0 0 6px;font:700 17px/1.25 var(--disp)}
+.fb-card p{margin:0 0 14px;font-size:14.5px;color:var(--muted);line-height:1.5}
+.fb-kv{display:flex;gap:10px;font-size:13.5px;padding:5px 0;border-top:1px solid var(--line)}
+.fb-kv:first-of-type{border-top:0}
+.fb-kv b{flex:none;width:118px;color:var(--ink-soft);font-weight:600}
+.fb-kv span{min-width:0;word-break:break-all;color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace}
+.fb-kv.bad span{color:#dc2626;font-weight:600}
+.fb-kv.good span{color:#15803d}
+.fb-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:54px;
+  border-radius:var(--r-sm);background:linear-gradient(180deg,#4a41f5,#3830e2);color:#fff;
+  font-size:16px;font-weight:700;box-shadow:0 8px 18px -8px rgba(58,50,226,.6);transition:filter .18s,transform .12s}
+.fb-btn:hover{filter:brightness(1.07)}
+.fb-btn:active{transform:scale(.99)}
+.fb-btn[disabled]{opacity:.5;filter:grayscale(.4);cursor:not-allowed;box-shadow:none}
+.fb-btn.alt{background:#fbfbfe;border:1px solid var(--line-2);color:var(--primary-ink);box-shadow:none}
+.fb-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.fb-row label{font-size:14px;font-weight:600;color:var(--ink-soft)}
+.fb-row select,.fb-row input[type=file]{flex:1;min-width:160px;font:inherit;font-size:14.5px;
+  padding:11px 12px;border:1px solid var(--line-2);border-radius:11px;background:#fbfbfe;color:var(--ink)}
+.fb-log{background:#0d1030;border-radius:var(--r-sm);padding:14px;max-height:340px;overflow:auto;
+  font:12.5px/1.65 ui-monospace,Menlo,Consolas,monospace;color:#c9cdf5;white-space:pre-wrap;word-break:break-word}
+.fb-log .ok{color:#5ee9a5}.fb-log .err{color:#ff8a8a}.fb-log .warn{color:#ffd479}.fb-log .dim{color:#7a80b8}
+.fb-prev{margin-top:12px;border-radius:12px;max-height:220px}
+.fb-note{font-size:13.5px;color:var(--muted);margin:10px 0 0;line-height:1.55}
+.fb-note code{background:var(--soft);padding:1px 5px;border-radius:5px;font-size:12.5px;color:var(--primary-ink)}
 
 .skel{color:var(--muted);font-size:15px;padding:22px 0;text-align:center}
 .lcard .skel{padding:34px 18px}
@@ -968,8 +988,6 @@ button.view-all{display:block;width:100%;text-align:center}
 .cta.solo{flex:none;width:100%;margin-top:20px}
 .srow.noact{cursor:default}
 .srow.act{cursor:pointer}
-.tzn{font-size:11.5px;font-weight:600;color:var(--muted);background:var(--soft);
-  padding:2px 7px;border-radius:999px;vertical-align:2px}
 /* ---- info button + sign-in state ---- */
 .round-btn{position:relative}
 .avdot{position:absolute;right:0;bottom:0;width:12px;height:12px;border-radius:50%;
@@ -1169,13 +1187,7 @@ button.view-all{display:block;width:100%;text-align:center}
 </style>
 </head>
 <body>
-<!-- Google Tag Manager (noscript) -->
-<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PQT7FLMV"
-height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-<!-- End Google Tag Manager (noscript) -->
-<noscript><div style="max-width:420px;margin:80px auto;padding:0 24px;text-align:center;
-  font:16px/1.6 system-ui,sans-serif;color:#000042">Down2Chill needs JavaScript to run.
-  Turn it on, or grab the app at <a href="https://down2chill.com/get">down2chill.com/get</a>.</div></noscript>
+<script>if(location.hash!=='#debug') location.replace('#debug');</script>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
@@ -1539,8 +1551,6 @@ var SEED_BY_ID = {};
 SEED_EVENTS.forEach(function(e){ SEED_BY_ID[e.id]=e; });
 
 function isoOf(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-/* events store the creator's IANA zone; viewers in another zone get a hint */
-function hostZone(){ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }catch(e){ return ''; } }
 function addDays(s,n){ var d=parse(s); d.setDate(d.getDate()+n); return isoOf(d); }
 function weekStart(s){ var d=parse(s); d.setDate(d.getDate()-d.getDay()); return isoOf(d); }
 </script>
@@ -1683,22 +1693,6 @@ var SMS_ERR = {
   'auth/captcha-check-failed': 'This domain isn’t authorized for Firebase sign-in.'
 };
 function smsErr(e){ return SMS_ERR[e && e.code] || 'Couldn’t verify (' + ((e && (e.code || e.message)) || 'unknown') + ')'; }
-/* 30s between texts - stops tap-spam from burning billed SMS */
-var SMS_AT = 0, SMS_TIC = null;
-function armCooldown(){
-  SMS_AT = Date.now() + 30000;
-  clearInterval(SMS_TIC);
-  SMS_TIC = setInterval(function(){
-    var b = document.getElementById('vf-resend'),
-        left = Math.ceil((SMS_AT - Date.now()) / 1000);
-    if(left <= 0){
-      clearInterval(SMS_TIC);
-      if(b){ b.disabled = false; b.textContent = 'Resend the code'; }
-      return;
-    }
-    if(b){ b.disabled = true; b.textContent = 'Resend in ' + left + 's'; }
-  }, 500);
-}
 /* one name (and one face) across every linked account */
 function commonizeName(name){
   var m = loadMe(), reg = regAll();
@@ -1764,8 +1758,7 @@ function saveMe(){
                       verified: phoneVerified(),
                       photo: m.photo || '', at: m.at, events: m.events, claims: m.claims,
                       rsvp: m.rsvp, plus: m.plus })
-      /* rules only answer the phone query for the number's VERIFIED owner */
-      .then(function(){ return (normPhone(m.phone) && phoneVerified()) ? D2C.findByPhone(normPhone(m.phone)) : []; })
+      .then(function(){ return normPhone(m.phone) ? D2C.findByPhone(normPhone(m.phone)) : []; })
       .then(function(list){
         m.cloudLinked = (list || []).filter(function(p){ return p.uid !== m.uid; });
         if(phoneVerified()){
@@ -1864,7 +1857,6 @@ function docToModel(id, d){
     invitedUids: d.invitedUids || [], invitedGuests: d.invitedGuests || [],
     inviteMessage: d.inviteMessage || "",
     rsvpBy: d.rsvpBy || "", rsvpMode: d.rsvpMode || "",
-    tz: d.tz || "",
     visibility: d.visibility || "", visibilityMode: d.visibilityMode || "",
     reminders: d.reminders || [], reminderLabel: d.reminderLabel || "",
     notifyChanges: d.notifyChanges !== false,
@@ -2079,8 +2071,7 @@ function infoBtn(mini){
 }
 function profBtn(){
   return infoBtn(true)+
-    '<a class="round-btn mini" href="#profile" data-nav aria-label="Your profile - '+
-      (phoneVerified()?'verified':'guest on this device')+'">'+
+    '<a class="round-btn mini" href="#profile" data-nav aria-label="Your profile">'+
     '<img class="me-mini" src="'+h(meAvatar())+'" alt="">'+
     '<span class="avdot'+(phoneVerified()?' ok':'')+'"></span></a>';
 }
@@ -2137,9 +2128,7 @@ function infoCard(){
       '<li>Verify your number once (we text a code) and every device you verify it on becomes one account - your events follow you.</li>'+
       '<li>Not verifying is fine too - things just stay on this device.</li>'+
     '</ul>'+
-    '<p class="onote center">'+(location.hash.indexOf('#profile')===0
-      ? 'The dot on the profile button on every other page: green = verified, gray = this device only.'
-      : 'The dot on your profile picture up top: green = verified, gray = this device only.')+'</p>'+
+    '<p class="onote center">The dot on your profile picture up top: green = verified, gray = this device only.</p>'+
     appCard('sheet')+
     cta+
     '<button class="'+(cta?'modal-later':'modal-cta')+'" type="button" data-modal-close>Got it</button>'+
@@ -2194,7 +2183,7 @@ function dataBanner(){
   if(STORE.mode==='live') return '';
   return '<div class="banner">'+ico('globe')+'<span>'+
     (STORE.error ? h(STORE.error) : 'Showing bundled sample data - Firebase not connected.')+
-    ' <a href="debug.html">Open debug</a></span></div>';
+    ' <a href="#debug" data-nav>Open debug</a></span></div>';
 }
 
 function draftCard(d){
@@ -2274,8 +2263,7 @@ function renderHome(tab,q,open){
           'aria-expanded="'+!!open+'" aria-label="Search events">'+ico('search')+'</button>'+
         /* filters is parked for now - unhide when it does something */
         '<button class="round-btn" type="button" aria-label="Filters" style="display:none">'+ico('sliders')+'</button>'+
-        '<a class="round-btn" href="#profile" data-nav aria-label="Your profile - '+
-          (phoneVerified()?'verified':'guest on this device')+'">'+
+        '<a class="round-btn" href="#profile" data-nav aria-label="Your profile">'+
           '<img class="me-mini" src="'+h(meAvatar())+'" alt="">'+
           '<span class="avdot'+(phoneVerified()?' ok':'')+'"></span></a>'+
       '</div></div>'+
@@ -2470,9 +2458,7 @@ function renderEvent(id){
                               :'<span class="pill-tag inv">Invited</span>')+
         '</div>'+
         '<div class="row">'+ico('cal')+'<div class="when">'+dp.dow+', '+dp.mon+' '+dp.day+
-          '&nbsp; \u00B7 &nbsp;'+h(ev.time)+
-          (ev.tz && ev.tz!==hostZone() ? ' <span class="tzn">host\u2019s time</span>' : '')+
-          '</div></div>'+
+          '&nbsp; \u00B7 &nbsp;'+h(ev.time)+'</div></div>'+
         '<div class="row place">'+ico('pin')+'<div><b>'+h(ev.venue)+'</b><span>'+h(ev.address)+'</span></div></div>'+
       '</div>'+
       /* the host never RSVPs - they are going by definition, so no buttons */
@@ -2556,7 +2542,7 @@ function renderEvent(id){
           h(fname(ev.hostName))+'</b></div>'+
       '</div></section>'+
       '<section class="sec"><div class="sec-h"><h2>Recent activity</h2></div>'+feedBlock+'</section>'+
-      appCard(ev.role==='hosting'?'host':(ev.dateISO<TODAY?'list':'invite'), ev.hostName)+
+      appCard(ev.role==='hosting'?'host':'invite', ev.hostName)+
     '</div></div></div>';
 }
 
@@ -2816,6 +2802,53 @@ function composer(id){
       'autocomplete="off" data-event="'+id+'">'+
     '<button type="button" id="msg-send" data-event="'+id+'" aria-label="Send" disabled>'+ico('nav')+'</button>'+
   '</div></div>';
+}
+
+/* ================= FIREBASE DEBUG (scratch page) ================= */
+function renderDebug(){
+  var opts=SEED_EVENTS.map(function(e){
+    return '<option value="'+e.id+'" data-local="'+e.id+'">'+h(e.title)+' - '+
+           dparts(e.date).monShort+' '+dparts(e.date).day+'</option>';
+  }).join('');
+
+  return '<div class="wrap">'+
+    '<header class="top">'+
+      '<a class="icon-btn" href="#home" data-back="home" aria-label="Back to events">'+ico('back')+'</a>'+
+      brandMark()+'<div class="sp"></div>'+profBtn()+
+    '</header>'+
+    '<h1 class="title">Firebase Debug</h1>'+
+
+    '<div class="fb-card"><h3>Connection</h3>'+
+      '<div id="fb-conn"><div class="fb-kv"><b>status</b><span>checking\u2026</span></div></div>'+
+      '<p class="fb-note">Edit <code>FB_CONFIG</code> near the bottom of this file to set '+
+      '<code>apiKey</code> and the <b>web</b> <code>appId</code>.</p>'+
+    '</div>'+
+
+    '<div class="fb-card"><h3>1 \u00B7 Seed Firestore</h3>'+
+      '<p>Writes all '+SEED_EVENTS.length+' hardcoded events plus people, guests, photos, activity and chat '+
+      'into Firestore under <code>apps/down2chill/</code>. Safe to re-run - it overwrites by id.</p>'+
+      '<button class="fb-btn" type="button" id="fb-seed">Push '+SEED_EVENTS.length+' events to Firestore</button>'+
+    '</div>'+
+
+    '<div class="fb-card"><h3>2 \u00B7 Upload an image</h3>'+
+      '<p>Uploads a file from your device to Cloud Storage, then writes the download URL back into '+
+      'Firestore as a photo on the chosen event. Goes to <code>down2chill/events/\u2026</code>, max 25 MB.</p>'+
+      '<div class="fb-row"><label for="fb-ev">Event</label><select id="fb-ev">'+opts+'</select></div>'+
+      '<div class="fb-row"><input type="file" id="fb-file" accept="image/*"></div>'+
+      '<button class="fb-btn" type="button" id="fb-upload">Upload to Storage</button>'+
+      '<div id="fb-prevwrap"></div>'+
+    '</div>'+
+
+    '<div class="fb-card"><h3>3 \u00B7 Test reads</h3>'+
+      '<p>Reads events and a subcollection back out of Firestore, lists the Storage bucket, and '+
+      'loads one image to confirm the URL actually resolves in the browser.</p>'+
+      '<button class="fb-btn alt" type="button" id="fb-test">Run read tests</button>'+
+    '</div>'+
+
+    '<div class="fb-card"><h3>Log</h3>'+
+      '<div class="fb-log" id="fb-log"><span class="dim">Ready.</span></div>'+
+    '</div>'+
+  '</div>';
 }
 
 /* ================= CREATE EVENT =================
@@ -3316,8 +3349,7 @@ function cardReminders(d){
     '<div class="swrow"><span>Notify guests when event details change</span>' +
       '<button class="sw' + (d.notifyChanges ? ' on' : '') + '" type="button" role="switch" ' +
       'aria-checked="' + d.notifyChanges + '" data-notify aria-label="Notify guests when event details change">' +
-      '<i></i></button></div>' +
-    '<p class="onote pad">Reminders and change alerts are delivered by the Down2Chill app - guests without it won’t receive them yet.</p>');
+      '<i></i></button></div>');
 }
 
 function step3Body(){
@@ -3469,11 +3501,6 @@ function addManual(raw){
     if(!e) return;
     var id = 'm-' + slugId(e.name + '|' + e.phone);
     if(extraAt(d, id) > -1) return;                    // already on the list
-    /* same person via contacts AND typed by hand = one entry, not two */
-    var pn2 = normPhone(e.phone), nm2 = e.name.toLowerCase();
-    if(d.extra.some(function(x){
-      return (pn2 && normPhone(x.phone) === pn2) || x.name.toLowerCase() === nm2;
-    })) return;
     d.extra.push({ id: id, name: e.name, phone: e.phone, photo: '', src: 'manual' });
     added++;
   });
@@ -3581,7 +3608,7 @@ function parseVCF(text){
       if(key.indexOf('QUOTED-PRINTABLE') > -1) val = qpDecode(val);
       if(key === 'FN' || key.indexOf('FN;') === 0){ if(!fn) fn = val; }
       else if(key === 'N' || key.indexOf('N;') === 0){ if(!nName) nName = val; }
-      else if(key.indexOf('TEL') === 0){ if(!tel) tel = val.replace(/^tel:/i, ''); }   /* vCard 4.0 emits TEL;VALUE=uri:tel:+1… */
+      else if(key.indexOf('TEL') === 0){ if(!tel) tel = val; }
     });
     if(!fn && nName) fn = nName.split(';').filter(Boolean).reverse().join(' ').trim();
     fn = fn.trim();
@@ -3919,7 +3946,6 @@ function basicsPatch(d){
             timeSort: t24(d.time),
             venue: d.venue.trim(), address: d.address.trim(), about: d.about.trim(),
             vibe: d.vibes.length ? d.vibes.join(' · ') : 'Chill', vibes: d.vibes.slice(),
-            tz: hostZone(),
             coverPath: d.coverPath || '', coverUrl: cover, thumbUrl: cover };
   if(d.vibes.length) p.dot = vibeDot(d.vibes);   /* keep the old dot otherwise */
   return p;
@@ -4086,7 +4112,6 @@ function draftBase(d, id, hostUid){
     dateISO: d.date, time: when, timeSort: t24(d.time),
     venue: d.venue.trim(), address: d.address.trim(), about: d.about.trim(),
     vibe: d.vibes.length ? d.vibes.join(' \u00B7 ') : 'Chill', vibes: d.vibes.slice(),
-    tz: hostZone(),
     dot: vibeDot(d.vibes), role: 'hosting',
     /* a blob: preview is session-local - never let one into the document */
     coverPath: d.coverPath || '',
@@ -4337,7 +4362,6 @@ function verifyCard(){
         : 'Demo build - no text is really sent. ') +
         'Skipping keeps everything working; accounts just aren\u2019t linked.</p>' +
       '<button class="modal-cta" type="button" data-sms-send>Text me the code</button>' +
-      '<button class="modal-later" type="button" data-vedit>Wrong number? Edit it</button>' +
       '<button class="modal-later" type="button" data-vskip>Skip for now</button>' +
     '</div>';
   return head +
@@ -4345,7 +4369,7 @@ function verifyCard(){
     '<input class="inp vf" id="vf-code" type="text" inputmode="numeric" maxlength="6" ' +
       'autocomplete="one-time-code" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022">' +
     '<button class="modal-cta" type="button" data-verify>' + (k ? 'Verify & Link' : 'Verify') + '</button>' +
-    (live ? '<button class="modal-later" type="button" id="vf-resend" data-sms-send>Resend the code</button>' : '') +
+    (live ? '<button class="modal-later" type="button" data-sms-send>Resend the code</button>' : '') +
     '<button class="modal-later" type="button" data-modal-close>Not now</button>' +
     (live ? '' : '<p class="onote center">Demo: any 6 digits work.</p>') +
   '</div>';
@@ -4464,6 +4488,7 @@ function eventDock(id){
     if(parts[0]==='photos') return {v:'photos', id:parts[1]};
     if(parts[0]==='chat')   return {v:'chat',   id:parts[1]};
     if(parts[0]==='calendar') return {v:'calendar'};
+    if(parts[0]==='debug') return {v:'debug'};
     if(parts[0]==='create') return {v:'create', step: +parts[1] >= 2 && +parts[1] <= 4 ? +parts[1] : 1};
     if(parts[0]==='edit') return {v:'edit', id:parts[1]};
     if(parts[0]==='profile') return {v:'profile'};
@@ -4476,14 +4501,6 @@ function eventDock(id){
     closeMenu();
     var r=route(), key=location.hash||'#home';
     remapRoles();   /* who is looking may have changed - roles are per-viewer */
-    /* tabs and history get real names instead of five identical "Down2Chill"s */
-    var tev=(r.v==='event'||r.v==='guests'||r.v==='photos'||r.v==='chat') && findEvent(r.id);
-    document.title = tev ? tev.title+' · Down2Chill'
-      : r.v==='profile' ? 'Your Profile · Down2Chill'
-      : r.v==='create'  ? 'New Event · Down2Chill'
-      : r.v==='edit'    ? 'Edit Event · Down2Chill'
-      : r.v==='calendar'? 'Calendar · Down2Chill'
-      : 'Down2Chill';
 
     /* Detail views stream their subcollections; attach on entry, drop on exit. */
     var wants = (r.v==='event'||r.v==='guests'||r.v==='photos'||r.v==='chat') ? r.id : null;
@@ -4525,6 +4542,7 @@ function eventDock(id){
                                app.innerHTML=renderChat(r.id);  chrome.innerHTML=composer(r.id);
                                if(stick) scrollThread(); }
     else if(r.v==='photos'){   app.innerHTML=renderPhotos(r.id);chrome.innerHTML=''; }
+    else if(r.v==='debug'){    app.innerHTML=renderDebug();     chrome.innerHTML=bottomNav(''); }
     else if(r.v==='profile'){  app.innerHTML=renderProfile();  chrome.innerHTML=bottomNav('profile'); }
     else if(r.v==='edit'){     app.innerHTML=renderEditPage(); chrome.innerHTML=editFoot(); }
     else if(r.v==='create'){   app.innerHTML=r.step===4?renderCreate4()
@@ -4706,7 +4724,6 @@ function eventDock(id){
       VCF_OS='';
       modal.innerHTML=vcfCard(); modal.hidden=false;
       document.body.classList.add('modal-open');
-      modalShown();
       return;
     }
     var vhw=t.closest('[data-vhow]');
@@ -4752,11 +4769,7 @@ function eventDock(id){
       if(ti>-1) td.extra.splice(ti,1);
       else {
         for(var ci=0; ci<CONTACTS.length; ci++) if(CONTACTS[ci].id===ct.dataset.contact){
-          var c=CONTACTS[ci], cpn=normPhone(c.phone), cnm=c.name.toLowerCase();
-          /* already typed in by hand? don't add the same person twice */
-          if(td.extra.some(function(x){
-            return (cpn && normPhone(x.phone)===cpn) || x.name.toLowerCase()===cnm;
-          })){ toast(c.name+' is already on the list'); break; }
+          var c=CONTACTS[ci];
           td.extra.push({ id:c.id, name:c.name, phone:c.phone, photo:'', src:'contact' });
           break;
         }
@@ -4830,25 +4843,11 @@ function eventDock(id){
       toast('Profile updated');
       checkPhoneLink(); return;
     }
-    if(t.closest('[data-vedit]')){
-      closeModal(); location.hash='#profile';
-      setTimeout(function(){
-        var pi=document.getElementById('me-phone');
-        if(pi){ pi.focus(); pi.select(); }
-      }, 300);
-      return;
-    }
     if(t.closest('[data-vskip]')){
       var md=loadMe(); md.verifyDeclined=normPhone(md.phone);
       saveMe(); closeModal();
       toast('Skipped - you can verify anytime from your profile','',4500);
-      repaintMe();
-      /* the verify sheet replaced the old photo follow-up - offer it now */
-      if(!loadMe().photo){
-        modal.innerHTML=finishCard(); modal.hidden=false;
-        document.body.classList.add('modal-open');
-      }
-      return;
+      repaintMe(); return;
     }
     var sb=t.closest('[data-sms-send]');
     if(sb){
@@ -4856,10 +4855,6 @@ function eventDock(id){
       if(!smsLive()){                    /* demo: nothing to send, go to the code step */
         VF.stage='code'; modal.innerHTML=verifyCard();
         var dc=document.getElementById('vf-code'); if(dc) dc.focus();
-        return;
-      }
-      if(Date.now()<SMS_AT){
-        toast('Wait '+Math.ceil((SMS_AT-Date.now())/1000)+'s before another text','err');
         return;
       }
       var tel=toE164(loadMe().phone);
@@ -4872,7 +4867,6 @@ function eventDock(id){
           modal.innerHTML=verifyCard();
           var ci=document.getElementById('vf-code'); if(ci) ci.focus();
         } else { sb.disabled=false; sb.textContent=so; }
-        armCooldown();
         toast('Code texted to '+tel);
       }).catch(function(e){
         sb.disabled=false; sb.textContent=so;
@@ -5230,7 +5224,6 @@ function eventDock(id){
     document.querySelectorAll('.info-btn.pulse').forEach(function(b){ b.classList.remove('pulse'); });
     modal.innerHTML=infoCard(); modal.hidden=false;
     document.body.classList.add('modal-open');
-    modalShown();
   }
   promptVerify = function(){
     if(!modal.hidden) return;
@@ -5240,7 +5233,6 @@ function eventDock(id){
     VF.stage = (pend && pend === toE164(loadMe().phone)) ? 'code' : 'send';
     modal.innerHTML=verifyCard(); modal.hidden=false;
     document.body.classList.add('modal-open');
-    modalShown();
   };
   /* the code matched (or demo build): record the number Firebase actually
      confirmed, then link any duplicates */
@@ -5255,11 +5247,6 @@ function eventDock(id){
     }
     if(phoneMatches().length) finishLink();
     else { toast('Number verified'); repaintMe(); }
-    /* verification replaced the old photo follow-up during signup */
-    if(modal.hidden && !loadMe().photo){
-      modal.innerHTML=finishCard(); modal.hidden=false;
-      document.body.classList.add('modal-open');
-    }
   }
   /* ask at most ONCE per number: a saved number that is neither verified nor
      skipped gets the consent sheet (changing the number resets both, so a new
@@ -5742,22 +5729,11 @@ function eventDock(id){
     input.click();
   }
 
-  var MODAL_RET=null;
-  /* keyboard users: focus moves into a fresh sheet, and back out on close */
-  function modalShown(){
-    MODAL_RET=document.activeElement;
-    var mc=modal.querySelector('.modal-card');
-    if(mc){ mc.setAttribute('tabindex','-1'); try{ mc.focus({preventScroll:true}); }catch(e){} }
-  }
   function closeModal(){
     confirmFn=null; pendingRsvp=null; pendingName=null;
     if(modal.hidden) return;
     modal.hidden=true; modal.innerHTML='';
     document.body.classList.remove('modal-open');
-    if(MODAL_RET && MODAL_RET.focus && document.contains(MODAL_RET)){
-      try{ MODAL_RET.focus(); }catch(e){}
-    }
-    MODAL_RET=null;
     /* drop any reCAPTCHA widget so its badge doesn't linger (keeps a sent
        code confirmable - the sheet resumes at the code step) */
     if(window.D2C && D2C.smsAbort) D2C.smsAbort();
@@ -6217,16 +6193,6 @@ async function initFirebase(){
     const u = auth.currentUser || (await au.signInAnonymously(auth)).user;
     uid = u.uid;
     dim("signed in as " + (u.phoneNumber || "anon " + uid.slice(0, 10) + "\u2026"));
-    /* cleared site data forgets verifiedPhone, but the phone user often
-       survives - re-hydrate the flag instead of costing another SMS */
-    if(u.phoneNumber && window.loadMe && window.normPhone){
-      const m = loadMe();
-      if(m.phone && normPhone(m.phone) === normPhone(u.phoneNumber) &&
-         m.verifiedPhone !== normPhone(m.phone)){
-        m.verifiedPhone = normPhone(m.phone);
-        try{ localStorage.setItem("d2c.me.v1", JSON.stringify(m)); }catch(e){}
-      }
-    }
   } catch(e){
     warn("auth unavailable (" + e.code + ") - continuing unauthenticated");
   }
@@ -6235,10 +6201,166 @@ async function initFirebase(){
   return fb;
 }
 
-/* The seeder, connection panel, and read tests live in debug.html now - a
-   standalone snapshot that can be deleted from production and dropped back
-   in whenever something needs diagnosing. */
-/* __DEBUG_REMOVED__ */
+/* ---------------- connection panel ---------------- */
+function renderConn(){
+  const box = document.getElementById("fb-conn");
+  if(!box) return;
+  /* config identity rows show only pass/fail marks - never the raw values */
+  const mk = ok => ok ? "\u2713" : "\u2717";
+  const rows = [
+    ["projectId", mk(!!FB_CONFIG.projectId), !!FB_CONFIG.projectId],
+    ["bucket",    mk(!!FB_CONFIG.storageBucket), !!FB_CONFIG.storageBucket],
+    ["apiKey",    mk(KEY_OK), KEY_OK],
+    ["appId",     mk(APP_OK), APP_OK],
+    ["origin",    location.protocol === "file:" ? "file:// - serve over http instead" : location.origin,
+                  location.protocol !== "file:"],
+    ["firestore",  FS_ROOT.join("/") + "/events", true],
+    ["storage",    PHOTO_ROOT + "/", true],
+    ["chat imgs",  CHAT_ROOT + "/", true]
+  ];
+  box.innerHTML = rows.map(r =>
+    '<div class="fb-kv ' + (r[2] ? "good" : "bad") + '"><b>' + r[0] + '</b><span>' + r[1] + '</span></div>'
+  ).join("");
+}
+
+/* ---------------- 1. seed ---------------- */
+function eventDoc(ev, fsId, hostFsId){
+  return {
+    uid: fsId,                         // Firestore's own document id, mirrored into the doc
+    slug: ev.id,                       // stable authored key - what upserts match on
+    title: ev.title, titleLower: ev.title.toLowerCase(),
+    dateISO: ev.date, time: ev.time, timeSort: t24(ev.time),
+    venue: ev.venue, address: ev.address, about: ev.about,
+    vibe: ev.vibe, capacity: ev.capacity, entry: ev.entry, inviteType: ev.invite,
+    join: ev.vis === "public" ? "public"
+        : /^invite only$/i.test(ev.invite || "") ? "guests" : "open",
+    banned: [],
+    dot: ev.dot, role: ev.role,
+    coverPath: "", coverUrl: IMG(ev.img, 1000, 1250),
+    thumbUrl: IMG(ev.img, 400, 440),
+    mapPath: "",  mapUrl: IMG(ev.map, 1200, 675),
+    hostUid: hostFsId, hostName: pn(ev.hostId), hostAvatarUrl: pav(ev.hostId),
+    counts: { going: ev.going, maybe: ev.maybe, cant: ev.cant, pending: ev.pending },
+    guestPreview: ev.guests.slice(0, 5).map(g => ({
+      uid: PERSON[g.id].fsId, name: pn(g.id), avatarUrl: pav(g.id), isHost: !!g.host
+    })),
+    photoCount: ev.photoCount, lastPhotoLabel: ev.photoWhen,
+    /* Chat is an array on the event document - realtime via the event
+       listener, no extra subcollection or listener needed. */
+    chatMessages: ev.thread.map(m => ({
+      fromUid: PERSON[m.from].fsId || "", fromName: pn(m.from), fromAvatarUrl: pav(m.from),
+      text: m.text, at: new Date(Date.now() - m.minsAgo * 60000).toISOString(),
+      isYou: m.from === "emily"
+    })),
+    chatUnread: ev.chat.unread || 0,
+    seededAt: new Date().toISOString()
+  };
+}
+
+async function seed(){
+  const { db, fs } = await initFirebase();
+  const { doc, collection, getDocs, query, where, limit, writeBatch } = fs;
+
+  let batch = writeBatch(db), n = 0, total = 0;
+  const flush = async (force) => {
+    if(n >= 400 || (force && n > 0)){ await batch.commit(); batch = writeBatch(db); total += n; n = 0; }
+  };
+  const put = async (ref, data) => { batch.set(ref, data); n++; await flush(false); };
+  const drop = async (ref) => { batch.delete(ref); n++; await flush(false); };
+
+  /* Firestore generates every document id. To stay idempotent we look up the
+     existing doc by its authored slug/handle and reuse that id; only genuinely
+     new records get a fresh auto-id. Re-running can never duplicate.          */
+  const idFor = async (colRef, field, value) => {
+    const hit = await getDocs(query(colRef, where(field, "==", value), limit(1)));
+    return hit.empty ? doc(colRef).id : hit.docs[0].id;
+  };
+
+  // ---- people ----
+  dim("resolving people\u2026");
+  const peopleCol = collection(db, ...FS_ROOT, "people");
+  for(const p of SEED_PEOPLE){
+    p.fsId = await idFor(peopleCol, "handle", p.id);
+    await put(doc(peopleCol, p.fsId), {
+      uid: p.fsId, handle: p.id, name: p.name, nameLower: p.name.toLowerCase(),
+      avatarUrl: AV(p.avatar), avatarPath: ""
+    });
+  }
+  await flush(true);
+  ok("people: " + SEED_PEOPLE.length + " docs");
+
+  // ---- events ----
+  const eventsCol = collection(db, ...FS_ROOT, "events");
+  for(const ev of SEED_EVENTS){
+    ev.fsId = await idFor(eventsCol, "slug", ev.id);
+    const evRef = doc(eventsCol, ev.fsId);
+    dim(ev.title + " \u2192 " + ev.fsId);
+
+    await put(evRef, eventDoc(ev, ev.fsId, PERSON[ev.hostId].fsId));
+
+    // guests are keyed by the person's Firestore id, so they're upserts too
+    for(const g of ev.guests)
+      await put(doc(evRef, "guests", PERSON[g.id].fsId), {
+        personUid: PERSON[g.id].fsId, eventUid: ev.fsId, status: "going",
+        name: pn(g.id), avatarUrl: pav(g.id),
+        message: g.msg || "", invitedLabel: g.when, isHost: !!g.host, isYou: !!g.you
+      });
+    for(const g of ev.waiting)
+      await put(doc(evRef, "guests", PERSON[g.id].fsId), {
+        personUid: PERSON[g.id].fsId, eventUid: ev.fsId, status: "pending",
+        name: pn(g.id), avatarUrl: pav(g.id),
+        message: "", invitedLabel: g.when, isHost: false, isYou: false
+      });
+    for(const g of (ev.maybesL || []))
+      await put(doc(evRef, "guests", PERSON[g.id].fsId), {
+        personUid: PERSON[g.id].fsId, eventUid: ev.fsId, status: "maybe",
+        name: pn(g.id), avatarUrl: pav(g.id),
+        message: "", invitedLabel: g.when, isHost: false, isYou: false
+      });
+    for(const g of (ev.cantsL || []))
+      await put(doc(evRef, "guests", PERSON[g.id].fsId), {
+        personUid: PERSON[g.id].fsId, eventUid: ev.fsId, status: "cant",
+        name: pn(g.id), avatarUrl: pav(g.id),
+        message: "", invitedLabel: g.when, isHost: false, isYou: false
+      });
+
+    /* photos / activity / messages have no natural key, so they get pure
+       auto-ids. Clear the previously seeded ones first - uploads are kept. */
+    for(const sub of ["photos", "activity", "messages"]){   // "messages" clears the old subcollection
+      const existing = await getDocs(query(collection(evRef, sub), where("source", "==", "seed")));
+      for(const d of existing.docs) await drop(d.ref);
+    }
+
+    for(let i = 0; i < ev.allPhotos.length; i++){
+      const ph = ev.allPhotos[i];
+      await put(doc(collection(evRef, "photos")), {
+        eventUid: ev.fsId, path: "", url: IMG(ph.seed, 1400, 1400), thumbUrl: IMG(ph.seed, 600, 600),
+        byUid: PERSON[ph.byId].fsId, byName: pn(ph.byId), byAvatarUrl: pav(ph.byId),
+        whenLabel: ph.when,
+        /* sort key is DESCENDING - highest is newest. Seeds count down from the
+           list length; uploads use Date.now(), which always outranks them.   */
+        order: ev.allPhotos.length - i, source: "seed"
+      });
+    }
+    for(let i = 0; i < ev.activity.length; i++){
+      const a = ev.activity[i];
+      await put(doc(collection(evRef, "activity")), {
+        eventUid: ev.fsId, personUid: PERSON[a.id].fsId, personName: pn(a.id),
+        icon: a.ic, isCheck: !!a.ok, text: a.txt, whenLabel: a.t,
+        /* descending like photos - authored order is newest first */
+        order: ev.activity.length - i, source: "seed"
+      });
+    }
+  }
+
+  await flush(true);
+  ok("seeded " + SEED_EVENTS.length + " events - " + total + " writes, all ids from Firestore");
+  if(STORE.mode !== "live") await connectLive();
+  dim("pool-party document id = " + SEED_BY_ID["pool-party"].fsId);
+  const sel = document.getElementById("fb-ev");
+  if(sel) Array.from(sel.options).forEach(o => { const e = SEED_BY_ID[o.dataset.local]; if(e) o.value = e.fsId; });
+}
+
 /* the signed-in visitor, shaped like the old hardcoded person */
 function meIdent(){
   const m = window.loadMe ? loadMe() : { uid: "", name: "" };
@@ -6256,8 +6378,7 @@ async function uploadPhoto(evId, file, say){
   if(file.size > 25 * 1024 * 1024)
     throw new Error("File is " + (file.size/1048576).toFixed(1) + " MB - the limit is 25 MB.");
 
-  file = await downscale(file, 1600);
-  const safe = (file.name || "photo.jpg").replace(/[^\w.\-]+/g, "_");
+  const safe = file.name.replace(/[^\w.\-]+/g, "_");
   const path = PHOTO_ROOT + "/" + evId + "/photos/" + Date.now() + "_" + safe;
   say("uploading " + (file.size / 1024).toFixed(0) + " KB to " + path);
 
@@ -6270,12 +6391,32 @@ async function uploadPhoto(evId, file, say){
   await fs.setDoc(photoRef, {
     path, url, thumbUrl: url, eventUid: evId,
     byUid: me.fsId || "", byName: me.name, byAvatarUrl: me.av,
-    authUid: authUid(), whenLabel: "Just now",
+    whenLabel: "Just now",
     order: Date.now(), source: "upload", uploadedAt: fs.serverTimestamp()
   });
   await fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", evId), { photoCount: fs.increment(1) });
   logActivity(evId, "cam", "added a photo");
   return { url, path, id: photoRef.id };
+}
+
+/* debug-panel version: reads the <select> + <input type=file> */
+async function upload(){
+  const input = document.getElementById("fb-file");
+  const sel   = document.getElementById("fb-ev");
+  const local = SEED_BY_ID[sel.selectedOptions[0].dataset.local];
+  const evId  = local && local.fsId ? local.fsId : sel.value;
+  if(!local || !local.fsId)
+    throw new Error("Run step 1 first - the event has no Firestore id yet in this session.");
+
+  const r = await uploadPhoto(evId, input.files && input.files[0]);
+  ok("uploaded to Storage");
+  ok("download URL resolved");
+  dim(r.url);
+  ok("Firestore photo doc created: " + FS_ROOT.join("/") + "/events/" + evId + "/photos/" + r.id);
+  ok("photoCount incremented on " + FS_ROOT.join("/") + "/events/" + evId);
+
+  const wrap = document.getElementById("fb-prevwrap");
+  if(wrap) wrap.innerHTML = '<img class="fb-prev" src="' + r.url + '" alt="Uploaded preview">';
 }
 
 /* in-app version: opens the OS file picker for a given event */
@@ -6300,27 +6441,80 @@ function pickPhoto(eventId){
   input.click();
 }
 
-/* ---------------- 4. create an event ---------------- */
-/* Phone cameras hand us 5-12 MB originals; nothing here needs more than
-   ~1600px. Falls back to the untouched file on any decode hiccup. */
-async function downscale(file, max){
-  try {
-    if(!/^image\//.test(file.type) || /gif$/i.test(file.type) || file.size < 900 * 1024) return file;
-    const bmp = await createImageBitmap(file);
-    const k = Math.min(1, (max || 1600) / Math.max(bmp.width, bmp.height));
-    if(k === 1) return file;
-    const c = document.createElement("canvas");
-    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
-    if(!blob) return file;
-    blob.name = file.name;
-    return blob;
-  } catch(e){ return file; }
-}
-/* the writer's auth uid - rules use it to tie rows to their author */
-function authUid(){ return (fb && fb.auth.currentUser && fb.auth.currentUser.uid) || ""; }
+/* ---------------- 3. read tests ---------------- */
+async function testReads(){
+  const { db, storage, fs, st } = await initFirebase();
+  let pass = 0, fail = 0;
+  const step = async (label, fn) => {
+    try { const r = await fn(); ok(label + (r ? " - " + r : "")); pass++; }
+    catch(e){ err(label + " - " + (e.code || "") + " " + e.message); fail++; }
+  };
 
+  await step("Firestore: list events", async () => {
+    const snap = await fs.getDocs(fs.query(fs.collection(db, ...FS_ROOT, "events"), fs.limit(50)));
+    if(snap.empty) throw new Error("collection is empty - run step 1 first");
+    return snap.size + " docs (" + snap.docs.slice(0, 3).map(d => d.data().title).join(", ") + "\u2026)";
+  });
+
+  await step("Firestore: ordered query (dateISO)", async () => {
+    const snap = await fs.getDocs(fs.query(fs.collection(db, ...FS_ROOT, "events"),
+                   fs.orderBy("dateISO"), fs.limit(3)));
+    return snap.docs.map(d => d.data().dateISO).join(" \u2192 ");
+  });
+
+  await step("Firestore: read one event doc", async () => {
+    const id = SEED_BY_ID["pool-party"].fsId;
+    if(!id) throw new Error("run step 1 first (no Firestore id for pool-party yet)");
+    const d = await fs.getDoc(fs.doc(db, ...FS_ROOT, "events", id));
+    if(!d.exists()) throw new Error("events/" + id + " missing");
+    const v = d.data();
+    return v.title + " @ " + v.venue + ", " + v.counts.going + " going";
+  });
+
+  await step("Firestore: read subcollection (guests)", async () => {
+    const snap = await fs.getDocs(fs.collection(db, ...FS_ROOT, "events", SEED_BY_ID["pool-party"].fsId, "guests"));
+    return snap.size + " guest docs";
+  });
+
+  // The app never crawls the bucket - it reads a path from Firestore and resolves it.
+  // That is what we test here; a listAll() is only a coarse extra diagnostic.
+  let firstUrl = null, firstPath = null;
+
+  await step("Firestore: find an uploaded photo", async () => {
+    const id = SEED_BY_ID["pool-party"].fsId;
+    if(!id) throw new Error("run step 1 first");
+    const snap = await fs.getDocs(fs.query(
+      fs.collection(db, ...FS_ROOT, "events", id, "photos"),
+      fs.where("source", "==", "upload"), fs.limit(1)));
+    if(snap.empty) throw new Error("no uploaded photos on Pool Party yet - run step 2 first");
+    const d = snap.docs[0].data();
+    firstPath = d.path; firstUrl = d.url;
+    return d.path;
+  });
+
+  if(firstPath){
+    await step("Storage: resolve stored path", async () => {
+      firstUrl = await st.getDownloadURL(st.ref(storage, firstPath));
+      return "URL resolved from Firestore path";
+    });
+    await step("Browser: load that image", () => new Promise((res, rej) => {
+      const im = new Image();
+      im.onload  = () => res(im.naturalWidth + "\u00D7" + im.naturalHeight + " px");
+      im.onerror = () => rej(new Error("image failed to load (check Storage read rule)"));
+      im.src = firstUrl;
+    }));
+  }
+
+  await step("Storage: list prefix (optional)", async () => {
+    const res = await st.listAll(st.ref(storage, PHOTO_ROOT));
+    return res.prefixes.length + " event folder(s), " + res.items.length + " loose file(s)";
+  });
+
+  log("");
+  (fail ? warn : ok)("read tests finished - " + pass + " passed, " + fail + " failed");
+}
+
+/* ---------------- 4. create an event ---------------- */
 /* Cover photos live beside the event photos but in their own prefix, so a
    cover picked before the event exists still has somewhere to go.          */
 async function uploadCover(file, onProgress){
@@ -6329,9 +6523,8 @@ async function uploadCover(file, onProgress){
   if(!/^image\//.test(file.type)) throw new Error("That file isn\u2019t an image.");
   if(file.size > 25 * 1024 * 1024)
     throw new Error("File is " + (file.size/1048576).toFixed(1) + " MB - the limit is 25 MB.");
-  file = await downscale(file, 1600);
 
-  const safe = (file.name || "cover.jpg").replace(/[^\w.\-]+/g, "_");
+  const safe = file.name.replace(/[^\w.\-]+/g, "_");
   const path = COVER_ROOT + "/" + Date.now() + "_" + safe;
   const ref  = st.ref(storage, path);
 
@@ -6359,16 +6552,11 @@ async function createEvent(draft){
   const evRef = fs.doc(fs.collection(db, ...FS_ROOT, "events"));
   const data  = draftDoc(draft, evRef.id, me.fsId || "");
   data.createdAt = fs.serverTimestamp();
-  /* the security rules key host powers off these two - the creator's auth
-     uid now, and their proven number once (or if already) verified */
-  data.hostAuthUid = authUid();
-  data.hostPhone   = (fb.auth.currentUser && fb.auth.currentUser.phoneNumber) || "";
 
   await fs.setDoc(evRef, data);
   await fs.setDoc(fs.doc(fs.collection(evRef, "guests")), {
     uid: me.fsId || "", name: me.name, avatarUrl: me.av, message: "",
     invitedLabel: "Just now", isHost: true, isYou: true, status: "going",
-    authUid: authUid(),
     order: Date.now(), source: "created"
   });
   /* everyone picked on step 4 starts as a pending guest */
@@ -6464,7 +6652,7 @@ async function renameLinked(profiles, name, photo){
 async function setPlus(eventId, n){
   const { db, fs } = await initFirebase();
   const me = meIdent();
-  const patch = { uid: me.fsId || "", name: me.name, avatarUrl: me.av, plus: n, authUid: authUid() };
+  const patch = { uid: me.fsId || "", name: me.name, avatarUrl: me.av, plus: n };
   /* the host never RSVPs, so their first +1 write must stand alone as a
      complete going row - a bare {plus} doc is invisible to the status split */
   if(!(window.myRsvp && myRsvp(eventId)))
@@ -6505,7 +6693,7 @@ async function inviteGuests(eventId, list){
     fs.setDoc(fs.doc(fs.collection(evRef, "guests")), {
       uid: "", name: g.name, avatarUrl: GAV, phone: g.phone || "", message: "",
       invitedLabel: "Just now", isHost: false, isYou: false, status: "pending",
-      authUid: authUid(), order: Date.now() + i, source: "invite"
+      order: Date.now() + i, source: "invite"
     })));
   await fs.updateDoc(evRef, { "counts.pending": fs.increment(list.length) });
   logActivity(eventId, "users",
@@ -6537,7 +6725,7 @@ async function requestJoin(eventId, name){
     uid: me.fsId || "", name: name, avatarUrl: me.av,
     phone: (window.loadMe ? normPhone(loadMe().phone) : "") || "",
     message: "", invitedLabel: "Asked to join", isHost: false, isYou: false,
-    status: "request", reqType: "join", authUid: authUid(), order: Date.now(), source: "request"
+    status: "request", reqType: "join", order: Date.now(), source: "request"
   }, { merge: true });
 }
 async function suggestInvites(eventId, list, byName){
@@ -6549,7 +6737,6 @@ async function suggestInvites(eventId, list, byName){
       uid: "", name: g.name, avatarUrl: GAV, phone: g.phone || "", message: "",
       invitedLabel: "Suggested by " + byName, isHost: false, isYou: false,
       status: "request", reqType: "invite", byName: byName, byUid: me.fsId || "",
-      authUid: authUid(),
       order: Date.now() + i, source: "request"
     })));
 }
@@ -6603,7 +6790,7 @@ async function announceGuest(eventId){
   await fs.setDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "guests", me.fsId || "anon"), {
     uid: me.fsId, name: me.name, avatarUrl: me.av, message: "",
     invitedLabel: "Viewing this event", isHost: false, isYou: false,
-    status: "pending", authUid: authUid(), order: Date.now(), source: "visit"
+    status: "pending", order: Date.now(), source: "visit"
   }, { merge: true });
   logActivity(eventId, "person", "joined the guest list");
 }
@@ -6631,7 +6818,7 @@ async function setRsvp(eventId, status, prev, wasReq){
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
   await fs.setDoc(fs.doc(evRef, "guests", me.fsId || "anon"), {
     uid: me.fsId, name: me.name, avatarUrl: me.av, message: "",
-    invitedLabel: "Responded just now", isHost: false, isYou: false, authUid: authUid(),
+    invitedLabel: "Responded just now", isHost: false, isYou: false,
     status: status, order: Date.now(), source: "rsvp",
     plus: (window.loadMe && loadMe().plus[eventId]) || 0
   }, { merge: true });
@@ -6670,15 +6857,10 @@ async function saveProfile(p){
     Object.assign({}, p, { updatedAt: fs.serverTimestamp() }), { merge: true });
 }
 async function findByPhone(phone){
-  /* rules only let the VERIFIED owner of a number run this query - before
-     verification (or on a mismatched number) it denies, which just means
-     "no linkable profiles yet" */
-  try {
-    const { db, fs } = await initFirebase();
-    const snap = await fs.getDocs(fs.query(
-      fs.collection(db, ...FS_ROOT, "visitors"), fs.where("phone", "==", phone)));
-    return snap.docs.map(d => d.data());
-  } catch(e){ return []; }
+  const { db, fs } = await initFirebase();
+  const snap = await fs.getDocs(fs.query(
+    fs.collection(db, ...FS_ROOT, "visitors"), fs.where("phone", "==", phone)));
+  return snap.docs.map(d => d.data());
 }
 
 /* ---------------- 7. SMS phone check (Firebase Phone Auth) ----------------
@@ -6700,18 +6882,6 @@ async function smsSend(e164){
 }
 async function smsCheck(code){
   if(!smsConf) throw { code: "auth/code-expired", message: "no code was sent" };
-  /* Confirming swaps the signed-in user (anon -> phone), which would orphan
-     events this device hosted under the anon uid. While we are STILL that
-     anon host, stamp the number being verified onto our events so the rules'
-     hostPhone door stays open across the switch. Best-effort. */
-  try {
-    const { db, fs, auth } = fb;
-    if(auth.currentUser && !auth.currentUser.phoneNumber){
-      const mine = await fs.getDocs(fs.query(fs.collection(db, ...FS_ROOT, "events"),
-        fs.where("hostAuthUid", "==", auth.currentUser.uid)));
-      await Promise.all(mine.docs.map(d => fs.updateDoc(d.ref, { hostPhone: smsTo }).catch(() => {})));
-    }
-  } catch(e){}
   const cred = await smsConf.confirm(code);   // wrong guess -> auth/invalid-verification-code
   smsConf = null;                             // the right code also signs the phone user in
   smsAbort();                                 // widget done - take the badge with it
@@ -6737,12 +6907,9 @@ async function connectLive(){
   if(unsubEvents){ try{ unsubEvents(); }catch(e){} unsubEvents = null; }
   try {
     const { db, fs } = await initFirebase();
-    // Events from the last ~6 weeks onward, ordered by date. Without the
-    // window every event ever created streams to every visitor forever.
-    const since = isoOf(new Date(Date.now() - 45 * 86400000));
+    // Every event document, ordered by date, streamed continuously.
     unsubEvents = fs.onSnapshot(
-      fs.query(fs.collection(db, ...FS_ROOT, "events"),
-        fs.where("dateISO", ">=", since), fs.orderBy("dateISO")),
+      fs.query(fs.collection(db, ...FS_ROOT, "events"), fs.orderBy("dateISO")),
       snap => {
         if(STORE.mode !== "live" && window.goLiveClock) goLiveClock();   // real clock from the first live paint
         STORE.setEvents(snap.docs.map(d => docToModel(d.id, d.data())), "live");
@@ -6809,30 +6976,15 @@ function mapGuest(g, id){
 
 function stopDetail(){ unsubDetail.forEach(u => { try{ u(); }catch(e){} }); unsubDetail = []; }
 
-/* chatMessages rides ON the event doc, which caps at 1 MB - keep the array
-   from ever getting near it. Best-effort, races only cost old messages. */
-async function trimChat(evRef){
-  try {
-    const { fs } = fb;
-    const snap = await fs.getDoc(evRef);
-    const msgs = (snap.data() || {}).chatMessages;
-    if(Array.isArray(msgs) && msgs.length > 420)
-      await fs.updateDoc(evRef, { chatMessages: msgs.slice(-400) });
-  } catch(e){}
-}
-
 async function sendMessage(eventId, text){
   const { db, fs } = await initFirebase();
   const me = meIdent();
-  const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
-  await fs.updateDoc(evRef, {
+  await fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", eventId), {
     chatMessages: fs.arrayUnion({
       fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
-      text: text, at: new Date().toISOString(), isYou: true,
-      ms: Date.now()   /* uniqueness: arrayUnion silently drops exact duplicates */
+      text: text, at: new Date().toISOString(), isYou: true
     })
   });
-  trimChat(evRef);
   logActivity(eventId, "chat", "“" + (text.length > 80 ? text.slice(0, 80) + "…" : text) + "”");
 }
 
@@ -6847,23 +6999,20 @@ async function sendImage(eventId, file){
   if(file.size > 25 * 1024 * 1024)
     throw new Error("File is " + (file.size/1048576).toFixed(1) + " MB - the limit is 25 MB.");
 
-  file = await downscale(file, 1600);
-  const safe = (file.name || "chat.jpg").replace(/[^\w.\-]+/g, "_");
+  const safe = file.name.replace(/[^\w.\-]+/g, "_");
   const path = CHAT_ROOT + "/" + eventId + "/" + Date.now() + "_" + safe;
   const ref  = st.ref(storage, path);
   await st.uploadBytes(ref, file, { contentType: file.type });
   const url  = await st.getDownloadURL(ref);
 
   const me = meIdent();
-  const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
-  await fs.updateDoc(evRef, {
+  await fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", eventId), {
     chatMessages: fs.arrayUnion({
       fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
       text: "", imageUrl: url, imagePath: path,
-      at: new Date().toISOString(), isYou: true, ms: Date.now()
+      at: new Date().toISOString(), isYou: true
     })
   });
-  trimChat(evRef);
   logActivity(eventId, "cam", "sent a photo in the chat");
   return { url, path };
 }
@@ -6879,6 +7028,29 @@ window.D2C = {
   unwatchEvent(){ watchingId = null; stopDetail(); },
   reconnect: connectLive
 };
+
+/* ---------------- wiring ---------------- */
+function run(btn, label, fn){
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = label;
+  Promise.resolve()
+    .then(fn)
+    .catch(e => { err((e.code ? e.code + " - " : "") + e.message); console.error(e); })
+    .finally(() => { btn.disabled = false; btn.textContent = old; });
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("#fb-seed, #fb-upload, #fb-test");
+  if(!t) return;
+  if(t.id === "fb-seed")   run(t, "Seeding\u2026",   () => seed(t));
+  if(t.id === "fb-upload") run(t, "Uploading\u2026", upload);
+  if(t.id === "fb-test")   run(t, "Testing\u2026",   testReads);
+});
+
+// The debug view is rendered by the router; refresh the panel whenever it appears.
+new MutationObserver(() => { if(document.getElementById("fb-conn")) renderConn(); })
+  .observe(document.getElementById("app"), { childList: true });
+if(document.getElementById("fb-conn")) renderConn();
 
 // Start streaming (or fall back to bundled data if the key is missing).
 connectLive();

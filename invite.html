@@ -4182,6 +4182,10 @@ function renderEditPage(){
         '<section><h2 class="fld">Event Name</h2>' +
           '<input class="inp" id="c-title" type="text" maxlength="80" data-d="title" aria-label="Event name" ' +
             'placeholder="Pool Party" value="' + h(d.title) + '"></section>' +
+        '<section><h2 class="fld">When?</h2>' + whenBlock(d) + '</section>' +
+        '<section><h2 class="fld">Where?</h2>' + whereBlock(d) + '</section>' +
+      '</div>' +
+      '<div class="ccol">' +
         '<section><h2 class="fld">Cover Photo</h2>' +
           '<div id="cover-wrap">' + coverBox(d) + '</div></section>' +
         '<section><h2 class="fld">About</h2>' +
@@ -4190,15 +4194,11 @@ function renderEditPage(){
               'placeholder="Tell guests what makes this event special.">' + h(d.about) + '</textarea>' +
             '<span class="count" id="c-count">' + d.about.length + ' / 500</span>' +
           '</div></section>' +
-      '</div>' +
-      '<div class="ccol">' +
-        '<section><h2 class="fld">When?</h2>' + whenBlock(d) + '</section>' +
-        '<section><h2 class="fld">Where?</h2>' + whereBlock(d) + '</section>' +
         '<section><h2 class="fld">Vibe</h2>' +
           '<p class="fsub">Pick as many as fit.</p>' + vibeGrid(d) + '</section>' +
       '</div>' +
     '</div>' +
-    '<div class="cgrid c3" style="margin-top:34px">' + step3Body() + '</div>' +
+    '<div class="cgrid c3">' + step3Body() + '</div>' +
   '</div>';
 }
 

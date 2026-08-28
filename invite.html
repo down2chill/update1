@@ -5856,6 +5856,7 @@ function eventDock(id){
     if(mev && !canJoin(mev)){ toast('Only invited guests can chat on this event.','err',4000); return; }
     var input=document.getElementById('photo-input');
     input.value='';
+    input.multiple=false;   /* the album picker may have left multi-select on */
     input.onchange=function(){
       var file=input.files && input.files[0];
       if(!file) return;
@@ -6378,7 +6379,7 @@ function meIdent(){
 
 /* ---------------- 2. upload ---------------- */
 /* Shared by the debug panel and the in-app "Add Photo" buttons. */
-async function uploadPhoto(evId, file, say){
+async function uploadPhoto(evId, file, say, noLog){
   say = say || dim;
   const { db, storage, fs, st } = await initFirebase();
   if(!evId) throw new Error("No event id - run step 1 first.");
@@ -6405,11 +6406,14 @@ async function uploadPhoto(evId, file, say){
     order: Date.now(), source: "upload", uploadedAt: fs.serverTimestamp()
   });
   await fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", evId), { photoCount: fs.increment(1) });
-  logActivity(evId, "cam", "added a photo");
+  if(!noLog) logActivity(evId, "cam", "added a photo");
   return { url, path, id: photoRef.id };
 }
 
-/* in-app version: opens the OS file picker for a given event */
+/* in-app version: opens the OS file picker for a given event. Albums take
+   SEVERAL photos at once (multi-select works on desktop and the iOS/Android
+   photo pickers); chat reuses this same input one-at-a-time, so the multiple
+   flag is set here and dropped again the moment a pick lands. */
 function pickPhoto(eventId){
   if(STORE.mode !== "live"){
     toast("Connect Firebase to add photos.", "err");
@@ -6417,16 +6421,26 @@ function pickPhoto(eventId){
   }
   const input = document.getElementById("photo-input");
   input.value = "";
+  input.multiple = true;
   input.onchange = async () => {
-    const file = input.files && input.files[0];
-    if(!file) return;
-    toast("Uploading photo\u2026", "wait", 0);
-    try {
-      await uploadPhoto(eventId, file, () => {});
-      toast("Photo added");          // the live listener repaints the grid itself
-    } catch(e){
-      toast(e.message || "Upload failed", "err");
+    input.multiple = false;
+    let files = Array.from(input.files || []).filter(f => /^image\//.test(f.type));
+    if(!files.length) return;
+    if(files.length > 10){
+      files = files.slice(0, 10);
+      toast("Uploading the first 10 - add the rest in another batch.", "", 4500);
     }
+    let okN = 0, failN = 0, lastErr = "";
+    for(let i = 0; i < files.length; i++){
+      toast(files.length === 1 ? "Uploading photo\u2026"
+            : "Uploading " + (i + 1) + " of " + files.length + "\u2026", "wait", 0);
+      try { await uploadPhoto(eventId, files[i], () => {}, true); okN++; }
+      catch(e){ failN++; lastErr = e.message || ""; }
+    }
+    /* one activity line for the whole batch instead of one per photo */
+    if(okN) logActivity(eventId, "cam", okN === 1 ? "added a photo" : "added " + okN + " photos");
+    if(failN) toast(okN + " added, " + failN + " failed" + (lastErr ? " - " + lastErr : ""), "err", 5200);
+    else toast(okN === 1 ? "Photo added" : okN + " photos added");   // the live listener repaints the grid
   };
   input.click();
 }

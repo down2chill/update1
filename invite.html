@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#8ea0fc">
 <title>Down2Chill</title>
+<link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<meta name="description" content="You’re invited - open the link to see the plan, RSVP, and join the chat.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Down2Chill">
+<meta property="og:title" content="Down2Chill · Events">
+<meta property="og:description" content="You’re invited - open the link to see the plan, RSVP, and join the chat.">
+<meta property="og:url" content="https://down2chill.com/invite">
+<meta property="og:image" content="https://down2chill.com/assets/social-1200.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="675">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://down2chill.com/assets/social-1200.jpg">
 <style>
 :root{
   --bg:#f7f7fb; --card:#fff; --ink:#000042; --ink-soft:#2a2c63;
@@ -859,13 +873,35 @@ textarea.inp{height:auto;min-height:158px;padding:16px 18px 40px;line-height:1.6
   font-size:clamp(14px,3.8vw,15px);font-weight:700;transition:filter .18s}
 .cbanner button:hover{filter:brightness(1.08)}
 .cbanner.off button{background:var(--soft);color:var(--muted-2);cursor:default;filter:none}
-.addbox{display:flex;gap:10px}
-.addbox .inp{flex:1;min-width:0;height:58px}
-.addbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:58px;
-  padding:0 20px;border-radius:var(--r-md);background:var(--soft);color:var(--primary);
-  font-size:clamp(15px,4vw,16px);font-weight:700;transition:background .18s}
+.addbox{display:flex;gap:8px}
+/* 16px flat (no clamp) + slim padding: "Christopher Alexander (530) 555-0123"
+   must fit a 390px phone without clipping */
+.addbox .inp{flex:1;min-width:0;height:58px;font-size:16px;padding:0 14px}
+/* icon-only: every pixel saved goes to the name+number input */
+.addbtn{flex:none;display:grid;place-items:center;width:52px;height:58px;
+  border-radius:var(--r-md);background:var(--soft);color:var(--primary);
+  transition:background .18s}
 .addbtn:hover{background:#e6e2fb}
-.addbtn svg.i{width:19px;height:19px;stroke-width:2.4}
+.addbtn svg.i{width:21px;height:21px;stroke-width:2.4}
+/* ---- contacts import card + how-to sheet ---- */
+.ccard{background:var(--card);border-radius:18px;padding:16px;box-shadow:0 4px 18px rgba(30,30,90,.08)}
+.cchead{display:flex;align-items:flex-start;gap:13px;text-align:left}
+.ccard .gic{background:#EDEBFE;color:#5B46E8;flex:none}
+.cchead .gtx>span{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.45}
+.ccbtns{display:flex;gap:10px;margin-top:14px}
+.ccb{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;
+  border-radius:14px;background:var(--soft);color:var(--primary-ink);font-weight:700;
+  font-size:14px;transition:filter .15s}
+.ccb.main{background:var(--primary);color:#fff}
+.ccb:hover{filter:brightness(1.05)}
+.ccb svg.i{width:18px;height:18px}
+@media (max-width:430px){.ccbtns{flex-direction:column}}
+.vhow{display:flex;gap:10px;margin:2px 0 12px}
+.vtab{flex:1;height:44px;border-radius:12px;background:var(--soft);color:var(--primary-ink);
+  font-weight:700;font-size:13.5px;transition:background .15s,color .15s}
+.vtab.on{background:var(--primary);color:#fff}
+.vsteps{margin:0 2px 14px;padding-left:22px;text-align:left}
+.vsteps li{font-size:13.5px;line-height:1.5;color:var(--ink-soft);margin:6px 0}
 .ghead.mt{margin-top:20px}
 .gav .cam{position:absolute;right:-3px;bottom:-2px;display:grid;place-items:center;width:21px;height:21px;
   border-radius:50%;background:var(--primary);color:#fff;border:2px solid var(--card);transition:filter .18s}
@@ -897,7 +933,14 @@ textarea.inp{height:auto;min-height:158px;padding:16px 18px 40px;line-height:1.6
 .modal-cta.pick:hover{filter:none;border-color:var(--primary);background:#fbfaff}
 .tagn{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   background:var(--soft);color:var(--primary);padding:3px 8px;border-radius:8px}
-.modal-card.claim{max-height:calc(100vh - 48px);overflow-y:auto}
+/* dvh where supported - plain vh overshoots under mobile URL bars and cut
+   the card's bottom edge off screen */
+.modal-card.claim{max-height:calc(100vh - 72px);overflow-y:auto;padding-bottom:32px}
+@supports (height:100dvh){.modal-card.claim{max-height:calc(100dvh - 72px)}}
+/* the info sheet is the tallest card - its close button rides the scroll,
+   pinned to the top right of the visible area */
+.modal-card.info .modal-x{position:sticky;top:6px;float:right;margin:-24px -14px 0 0;
+  z-index:3;background:rgba(255,255,255,.92);box-shadow:0 1px 7px rgba(20,20,80,.10)}
 .modal-cta.pick.on{border-color:var(--primary);background:#f3f0ff;
   box-shadow:0 0 0 1.5px var(--primary),0 2px 10px rgba(30,30,100,.08)}
 .mg-lab{margin:16px 2px 8px;font:700 12px/1 var(--disp);letter-spacing:.08em;
@@ -1001,7 +1044,7 @@ button.view-all{display:block;width:100%;text-align:center}
 .claim-or{display:flex;align-items:center;gap:12px;margin:8px 0 12px;color:var(--muted-2);font-size:13px}
 .claim-or::before,.claim-or::after{content:"";flex:1;height:1px;background:var(--line)}
 .modal-card .addbox .inp{height:54px}
-.modal-card .addbtn{height:54px;padding:0 16px;font-size:14.5px}
+.modal-card .addbtn{width:50px;height:54px}
 .claim-row.inv:hover{background:none}
 .claim-row.inv span{margin-left:auto}
 .inv-x{flex:none;display:grid;place-items:center;width:34px;height:34px;margin-left:6px;
@@ -2047,7 +2090,7 @@ function appCard(kind, host){
      : ['Down2Chill is better live',
              'This page only shows scheduled plans. Right-now invites - friends who are free at '+
              'this moment - only happen in the app.'];
-  return '<a class="appcard" href="https://down2chill.com" target="_blank" rel="noopener">'+
+  return '<a class="appcard" href="https://down2chill.com/get" target="_blank" rel="noopener">'+
     '<span class="apic">'+ico('bolt')+'</span>'+
     '<span class="aptx"><b>'+tb[0]+'</b><span>'+tb[1]+'</span></span>'+
     '<span class="apcta">Get the app</span>'+
@@ -2072,7 +2115,7 @@ function infoCard(){
     cta = '<button class="modal-cta" type="button" data-info-verify>Verify my number</button>';
   else if(!normPhone(m.phone) || !m.name)
     cta = '<button class="modal-cta" type="button" data-info-profile>Set up my profile</button>';
-  return '<div class="modal-card claim">'+
+  return '<div class="modal-card claim info">'+
     '<button class="modal-x" type="button" data-modal-close aria-label="Close">'+ico('x')+'</button>'+
     '<div class="modal-ic">'+ico('help')+'</div>'+
     '<h3 id="modal-h">How events work</h3>'+
@@ -3419,6 +3462,10 @@ var repaintInvites = function(){};
    -------------------------------------------------------------------- */
 var CONTACTS = [];
 
+/* Friends rosters and groups are APP features. The web keeps all of that
+   code (flip this on to see it) but draws only imported contacts. */
+var WEB_ROSTER_DEMO = false;
+
 function slugId(s){
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) ||
          'x' + (Math.abs(hashStr(String(s))) % 100000);
@@ -3435,7 +3482,7 @@ function extraAt(d, id){
 }
 function inviteCount(d){ return d.invitees.length + d.extra.length; }
 
-/* "Sam Ruiz 555-0123" -> {name:'Sam Ruiz', phone:'555-0123'} */
+/* "Sam Ruiz (530) 555-0123" -> {name:'Sam Ruiz', phone:'(530) 555-0123'} */
 function parseEntry(raw){
   var t = String(raw).trim().replace(/\s+/g, ' ');
   if(!t) return null;
@@ -3683,33 +3730,63 @@ function defaultMsg(d){
 }
 function inviteMsg(d){ return d.msgTouched ? d.inviteMsg : defaultMsg(d); }
 
+/* which OS the contacts how-to is open for: '' | 'ios' | 'android' */
+var VCF_OS = '';
+function vcfCard(){
+  var steps = VCF_OS === 'ios'
+    ? ['On iPhone, open <b>Contacts</b> and tap <b>Lists</b> in the top corner.',
+       'Touch and hold <b>All Contacts</b> (or any list), then tap <b>Export</b>.',
+       'Save the .vcf file, come back here, and choose it below.']
+    : VCF_OS === 'android'
+    ? ['Open the <b>Contacts</b> app and tap <b>Fix &amp; manage</b> - on some phones it\u2019s the three-dot menu.',
+       'Tap <b>Export to file</b> to save a .vcf.',
+       'Come back here and choose that file below.']
+    : null;
+  return '<div class="modal-card claim">' +
+    '<button class="modal-x" type="button" data-modal-close aria-label="Close">' + ico('x') + '</button>' +
+    '<div class="modal-ic">' + ico('users') + '</div>' +
+    '<h3 id="modal-h">Upload your contacts</h3>' +
+    '<p>Export a contacts file (.vcf) from your phone once and everyone\u2019s name and number lands here - no typing.</p>' +
+    '<div class="vhow">' +
+      '<button class="vtab' + (VCF_OS === 'ios' ? ' on' : '') + '" type="button" data-vhow="ios">iPhone steps</button>' +
+      '<button class="vtab' + (VCF_OS === 'android' ? ' on' : '') + '" type="button" data-vhow="android">Android steps</button>' +
+    '</div>' +
+    (steps ? '<ol class="vsteps">' + steps.map(function(s){ return '<li>' + s + '</li>'; }).join('') + '</ol>' : '') +
+    '<button class="modal-cta" type="button" data-vcf>Choose the file</button>' +
+    '<p class="onote center">Your contacts stay on this device - only the people you actually invite are saved with the event.</p>' +
+    '<button class="modal-later" type="button" data-modal-close>Not now</button>' +
+  '</div>';
+}
 function inviteBody(){
   var d = loadDraft(), n = inviteCount(d), msg = inviteMsg(d),
       live = CONTACTS.length > 0,
       chips = [{ k:'all', name:'All', ic:'grid' }].concat(GROUPS);
   return '<section class="full">' +
-      '<p class="lede">Invite friends or groups to your event.</p>' +
+      '<p class="lede">Invite friends to your event.</p>' +
       '<p class="fsub">You can always invite more people later.</p>' +
+      (live || WEB_ROSTER_DEMO ?
       '<div class="searchbar"><svg class="i"><use href="#search"/></svg>' +
-        '<input id="q-invite" type="search" placeholder="Search friends and groups" ' +
-          'value="' + h(inviteQ) + '" aria-label="Search friends and groups">' +
-        '<svg class="i filt"><use href="#sliders"/></svg></div>' +
+        '<input id="q-invite" type="search" placeholder="' +
+          (live ? 'Search your contacts' : 'Search friends and groups') + '" ' +
+          'value="' + h(inviteQ) + '" aria-label="Search the invite list">' +
+        '<svg class="i filt"><use href="#sliders"/></svg></div>' : '') +
     '</section>' +
 
     (live ? '' :
-    '<section class="full"><div class="cbanner">' +
-      '<span class="gic">' + ico('person') + '</span>' +
-      '<span class="gtx"><b>Use your contacts</b><span>' +
+    '<section class="full"><div class="ccard">' +
+      '<div class="cchead"><span class="gic">' + ico('users') + '</span>' +
+        '<span class="gtx"><b>Invite from your contacts</b>' +
+        '<span>Load your address book once - names and numbers fill themselves in.</span></span></div>' +
+      '<div class="ccbtns">' +
         (contactsReady()
-          ? 'Pick from your phone\u2019s address book, or import a saved contacts file.'
-          : 'This browser has no contact picker - in your Contacts app choose Share \u2192 vCard, then import the file here.') +
-      '</span>' +
-      '<button class="alt" type="button" data-vcf>Import a contacts file (.vcf) - adds everyone at once</button>' +
-      '</span>' +
-      (contactsReady() ? '<button type="button" data-contacts>Allow</button>' : '') +
+          ? '<button class="ccb main" type="button" data-contacts>' + ico('users') + 'Choose from phone</button>'
+          : '') +
+        '<button class="ccb' + (contactsReady() ? '' : ' main') + '" type="button" data-vcfhelp>' +
+          ico('share') + 'Upload a contacts file</button>' +
+      '</div>' +
     '</div></section>') +
 
-    (live ? '' :
+    (!live && WEB_ROSTER_DEMO ?
     '<section class="full"><h3 class="gh">Browse by group</h3>' +
       '<p class="fsub">Filter the friend list below.</p>' +
       '<div class="gchips">' + chips.map(function(g){
@@ -3717,8 +3794,9 @@ function inviteBody(){
         return '<button class="gchip' + (on ? ' on' : '') + '" type="button" data-gfilter="' + g.k + '" ' +
           'aria-pressed="' + on + '">' + ico(g.ic) + h(g.name) + '</button>';
       }).join('') + '</div>' +
-    '</section>') +
+    '</section>' : '') +
 
+    (live || WEB_ROSTER_DEMO ?
     '<section class="full"><div class="ghead">' +
       '<h3>' + h(live ? 'From your contacts (' + CONTACTS.length + ')'
                       : inviteGroup === 'all' ? 'Suggested' : groupName(inviteGroup)) + '</h3>' +
@@ -3727,23 +3805,27 @@ function inviteBody(){
             ? 'Remove all' : 'Add all (' + CONTACTS.length + ')') + '</button>' : '') +
       (n ? '<button type="button" data-gclear>Clear (' + n + ')</button>' : '') +
     '</div>' +
-    '<div class="glist" id="g-list">' + inviteList() + '</div></section>' +
+    '<div class="glist" id="g-list">' + inviteList() + '</div></section>' : '') +
 
     '<section class="full"><h2 class="fld">Add someone yourself</h2>' +
       '<p class="fsub">Not on Down2Chill yet? Type a name - add a phone number after it if you have one.</p>' +
       '<div class="addbox">' +
         '<input class="inp" id="c-add" type="text" autocomplete="off" ' +
-          'placeholder="Sam Ruiz 555-0123" aria-label="Add a guest by name">' +
-        '<button class="addbtn" type="button" data-addguest>' + ico('plus') + 'Add</button>' +
+          'placeholder="Sam Ruiz (530) 555-0123" aria-label="Add a guest by name">' +
+        '<button class="addbtn" type="button" data-addguest aria-label="Add">' + ico('plus') + '</button>' +
       '</div>' +
       '<p class="onote">Press Enter after each name, or separate several with commas.</p>' +
       manualList(d) +
     '</section>' +
 
+    (WEB_ROSTER_DEMO ?
     '<section class="full"><h2 class="fld">Invite Groups</h2>' +
       '<p class="fsub">Invite everyone in a group at once.</p>' +
       '<div class="glist">' + groupRows() + '</div>' +
-      '<div class="glist mt"><button class="grp" type="button" data-sharelink>' +
+    '</section>' : '') +
+
+    '<section class="full"><h2 class="fld">Share the link</h2>' +
+      '<div class="glist"><button class="grp" type="button" data-sharelink>' +
         '<span class="gic" style="background:#EDEBFE;color:#5B46E8">' + ico('link') + '</span>' +
         '<span class="gtx"><b>Share Event Link</b><span>Invite people by text, email, or another app.</span></span>' +
         ico('chev','cv2') + '</button></div>' +
@@ -4219,12 +4301,12 @@ function inviteCard(ev){
     '<button class="modal-x" type="button" data-modal-close aria-label="Close">' + ico('x') + '</button>' +
     '<div class="modal-ic">' + ico('user-plus') + '</div>' +
     '<h3 id="modal-h">Invite friends</h3>' +
-    '<p>Add a name - with a phone number too, like <b>Sam Ruiz 555-0123</b>. ' +
+    '<p>Add a name - with a phone number too, like <b>Sam Ruiz (530) 555-0123</b>. ' +
       'They\u2019ll find their name waiting when they open the event link.</p>' +
     (rows ? '<div class="claim-list">' + rows + '</div>' : '') +
     '<div class="addbox">' +
-      '<input class="inp" id="inv-add" type="text" maxlength="60" placeholder="Name and phone">' +
-      '<button class="addbtn" type="button" data-inv-add>' + ico('plus') + 'Add</button>' +
+      '<input class="inp" id="inv-add" type="text" maxlength="60" placeholder="Sam Ruiz (530) 555-0123">' +
+      '<button class="addbtn" type="button" data-inv-add aria-label="Add">' + ico('plus') + '</button>' +
     '</div>' +
     '<button class="modal-cta go" type="button" data-inv-send' + (INVQ.length ? '' : ' disabled') + '>' +
       (INVQ.length ? 'Send Invite' + (INVQ.length === 1 ? '' : 's') + ' (' + INVQ.length + ')'
@@ -4341,7 +4423,7 @@ function renderProfile(){
           'placeholder="Your name" value="' + h(m.name) + '">' +
         '<label class="lab" for="me-phone">Phone number</label>' +
         '<input class="inp" id="me-phone" type="tel" inputmode="tel" maxlength="20" data-me="phone" ' +
-          'placeholder="555-0123" value="' + h(m.phone) + '">' +
+          'placeholder="(530) 555-0123" value="' + h(m.phone) + '">' +
         '<p class="onote">Add your number and every device you use it on becomes one account - ' +
           'events from each show up everywhere.</p>' +
         '<button class="cta solo" type="button" data-mesave>Save Profile</button>' +
@@ -4637,10 +4719,21 @@ function eventDock(id){
       saveDraft(); repaintStep4(); return;
     }
     if(t.closest('[data-contacts]')){ importContacts(); return; }
+    if(t.closest('[data-vcfhelp]')){
+      VCF_OS='';
+      modal.innerHTML=vcfCard(); modal.hidden=false;
+      document.body.classList.add('modal-open');
+      return;
+    }
+    var vhw=t.closest('[data-vhow]');
+    if(vhw){
+      VCF_OS = VCF_OS===vhw.dataset.vhow ? '' : vhw.dataset.vhow;
+      modal.innerHTML=vcfCard(); return;
+    }
     if(t.closest('[data-vcf]')){
       var vfi=document.getElementById('vcf-input');
       vfi.value='';
-      vfi.onchange=function(){ var f=vfi.files&&vfi.files[0]; if(f) importVcf(f); };
+      vfi.onchange=function(){ var f=vfi.files&&vfi.files[0]; if(f){ closeModal(); importVcf(f); } };
       vfi.click(); return;
     }
     if(t.closest('[data-callall]')){
@@ -6111,16 +6204,13 @@ async function initFirebase(){
 function renderConn(){
   const box = document.getElementById("fb-conn");
   if(!box) return;
+  /* config identity rows show only pass/fail marks - never the raw values */
+  const mk = ok => ok ? "\u2713" : "\u2717";
   const rows = [
-    ["projectId", FB_CONFIG.projectId, !!FB_CONFIG.projectId],
-    ["bucket",    FB_CONFIG.storageBucket, !!FB_CONFIG.storageBucket],
-    ["apiKey",    KEY_OK ? "set \u2713"
-                  : UNSUBBED(FB_CONFIG.apiKey) ? "PLACEHOLDER - build did not substitute"
-                  : "MISSING", KEY_OK],
-    ["appId",     APP_OK ? "web app \u2713"
-                  : UNSUBBED(FB_CONFIG.appId) ? "PLACEHOLDER - build did not substitute"
-                  : FB_CONFIG.appId ? "NOT a web appId (must contain :web:)"
-                  : "MISSING", APP_OK],
+    ["projectId", mk(!!FB_CONFIG.projectId), !!FB_CONFIG.projectId],
+    ["bucket",    mk(!!FB_CONFIG.storageBucket), !!FB_CONFIG.storageBucket],
+    ["apiKey",    mk(KEY_OK), KEY_OK],
+    ["appId",     mk(APP_OK), APP_OK],
     ["origin",    location.protocol === "file:" ? "file:// - serve over http instead" : location.origin,
                   location.protocol !== "file:"],
     ["firestore",  FS_ROOT.join("/") + "/events", true],

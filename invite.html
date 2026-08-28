@@ -25,7 +25,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <meta property="og:url" content="https://down2chill.com/invite">
 <meta property="og:image" content="https://down2chill.com/assets/social-1200.jpg">
 <meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="675">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://down2chill.com/assets/social-1200.jpg">
 <style>
@@ -1081,6 +1081,9 @@ button.view-all{display:block;width:100%;text-align:center}
 .modal-card .tawrap .inp{padding-right:64px}
 .modal-card .addbox .inp{height:54px}
 .modal-card .addbtn{width:50px;height:54px}
+/* labelled addbtn ("That's me" / "Continue"): text beside the arrow, never wrapped */
+.addbtn.lbl{width:auto;grid-auto-flow:column;gap:7px;padding:0 15px;white-space:nowrap;font-size:15px;font-weight:700}
+.addbtn.lbl svg.i{width:18px;height:18px}
 .claim-row.inv:hover{background:none}
 .claim-row.inv span{margin-left:auto}
 .inv-x{flex:none;display:grid;place-items:center;width:34px;height:34px;margin-left:6px;
@@ -2315,7 +2318,7 @@ function dataBanner(){
   if(STORE.mode==='live') return '';
   return '<div class="banner">'+ico('globe')+'<span>'+
     (STORE.error ? h(STORE.error) : 'Showing bundled sample data - Firebase not connected.')+
-    ' <a href="debug.html">Open debug</a></span></div>';
+    '</span></div>';
 }
 
 function draftCard(d){
@@ -4422,7 +4425,7 @@ function claimCard(ev){
     '<div class="addbox">' +
       '<input class="inp" id="claim-name" type="text" maxlength="40" placeholder="Your name" value="' +
         h(loadMe().name || '') + '">' +
-      '<button class="addbtn" type="button" data-claim-go>' + ico('arr') + 'That\u2019s me</button>' +
+      '<button class="addbtn lbl" type="button" data-claim-go>That\u2019s me' + ico('arr') + '</button>' +
     '</div>' +
     (needOk ? '<p class="onote center">Names not on the list are sent to ' +
       h(fname(ev.hostName)) + ' for approval.</p>' : '') +
@@ -4478,7 +4481,7 @@ function nameCard(){
     '<p>Your guests will see who\u2019s inviting them.</p>' +
     '<div class="addbox">' +
       '<input class="inp" id="claim-name" type="text" maxlength="40" placeholder="Your name">' +
-      '<button class="addbtn" type="button" data-name-go>' + ico('arr') + 'Continue</button>' +
+      '<button class="addbtn lbl" type="button" data-name-go>Continue' + ico('arr') + '</button>' +
     '</div>' +
   '</div>';
 }

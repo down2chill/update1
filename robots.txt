@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://down2chill.com/sitemap.xml

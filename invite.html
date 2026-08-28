@@ -987,15 +987,38 @@ button.view-all{display:block;width:100%;text-align:center}
 .cta.solo{flex:none;width:100%;margin-top:20px}
 .srow.noact{cursor:default}
 .srow.act{cursor:pointer}
-/* ---- CookieYes (injected by GTM) ----
-   Never on the first paint and never off the Home page: everything stays
-   hidden until the visitor's first tap flips body.cky-show on Home. */
-.cky-consent-container,.cky-consent-bar,.cky-overlay,.cky-modal,
-.cky-btn-revisit-wrapper{display:none!important}
-body.cky-show .cky-consent-container,body.cky-show .cky-consent-bar,
-body.cky-show .cky-overlay,body.cky-show .cky-modal{display:block!important}
-body.cky-show .cky-btn-revisit-wrapper{display:flex!important;top:auto!important;
+/* ---- CookieYes (injected by GTM) - same treatment as index.html ----
+   Its UI never renders; the app's own privacy panel below drives the hidden
+   opt-out checkbox + save button programmatically. */
+.cky-consent-container,.cky-consent-bar,.cky-overlay,.cky-modal{display:none!important}
+/* revisit button: always visible, pinned just above the bottom nav */
+.cky-btn-revisit-wrapper{display:flex!important;position:fixed!important;top:auto!important;
   left:auto!important;right:12px!important;bottom:104px!important;z-index:45!important}
+/* app-styled privacy panel, opened from the revisit button or the info sheet */
+.privacy-panel{position:fixed;right:12px;bottom:160px;z-index:55;
+  width:min(340px,calc(100vw - 24px));border-radius:20px;border:1px solid var(--line);
+  background:var(--card);box-shadow:0 24px 60px -18px rgba(20,20,80,.4);padding:18px}
+.pp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.pp-head .ppt{display:flex;align-items:center;gap:7px;font:700 11px/1 var(--disp);
+  letter-spacing:.1em;color:var(--primary-ink)}
+.pp-close{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;
+  border:1px solid var(--line-2);color:var(--muted)}
+.pp-lead{font-size:12.5px;line-height:1.55;color:var(--ink-soft)}
+.pp-lead strong{color:var(--ink)}
+.pp-row{position:relative;display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin-top:14px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);
+  background:var(--soft);cursor:pointer}
+.pp-label{font-size:12px;font-weight:700;color:var(--ink)}
+.pp-sub{font-size:10.5px;font-weight:500;color:var(--muted)}
+.pp-row input{position:absolute;opacity:0;pointer-events:none}
+.pp-switch{position:relative;flex-shrink:0;width:40px;height:22px;border-radius:999px;
+  background:var(--muted-2);transition:background .2s}
+.pp-switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;
+  border-radius:999px;background:#fff;transition:transform .2s}
+.pp-row input:checked+.pp-switch{background:var(--primary)}
+.pp-row input:checked+.pp-switch::after{transform:translateX(18px)}
+.pp-note{margin-top:10px;font-size:10.5px;color:var(--muted)}
+.linky{font:inherit;font-size:12.5px;color:var(--primary);text-decoration:underline;cursor:pointer}
 .tzn{font-size:11.5px;font-weight:600;color:var(--muted);background:var(--soft);
   padding:2px 7px;border-radius:999px;vertical-align:2px}
 /* ---- info button + sign-in state ---- */
@@ -1225,6 +1248,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <symbol id="check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.4 12.2 2.5 2.5 4.7-4.9"/></symbol>
 <symbol id="help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4"/><circle cx="12" cy="16.6" r="1" fill="currentColor" stroke="none"/></symbol>
 <symbol id="bolt" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M13.4 2.2 5.6 13.3h4.5l-1.4 8.5 7.8-11.1h-4.5l1.4-8.5Z"/></symbol>
+<symbol id="copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
 <symbol id="x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9.3 9.3 5.4 5.4M14.7 9.3l-5.4 5.4"/></symbol>
 <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></symbol>
 <symbol id="users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.3"/><path d="M2.8 19.5a6.4 6.4 0 0 1 12.4 0"/><path d="M16.2 5.7a3.3 3.3 0 0 1 0 5.7M17.6 14.2a6.4 6.4 0 0 1 3.6 5.3"/></symbol>
@@ -1281,6 +1305,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <input type="file" id="face-input" accept="image/*" hidden>
 <input type="file" id="cover-input" accept="image/*" hidden>
 <div id="toast" class="toast" hidden></div>
+<!-- privacy panel (replaces the CookieYes modal UI - same mechanism as index.html) -->
+<div class="privacy-panel" id="privacyPanel" hidden>
+  <div class="pp-head">
+    <span class="ppt"><svg class="i" style="width:14px;height:14px"><use href="#lock"/></svg>PRIVACY &amp; DATA</span>
+    <button class="pp-close" id="ppClose" type="button" aria-label="Close privacy panel"><svg class="i" style="width:14px;height:14px"><use href="#x2"/></svg></button>
+  </div>
+  <p class="pp-lead"><strong>We never sell or share your personal information.</strong> That&rsquo;s the default, always - nothing to configure. The only optional cookies are anonymous analytics that help us improve Down2Chill.</p>
+  <label class="pp-row">
+    <span><span class="pp-label">Anonymous analytics</span><br><span class="pp-sub">usage stats only - never tied to you</span></span>
+    <input type="checkbox" id="ppAnalytics" checked>
+    <span class="pp-switch" aria-hidden="true"></span>
+  </label>
+  <p class="pp-note">Your choice saves instantly and applies right away.</p>
+</div>
 <div class="modal" id="app-modal" role="dialog" aria-modal="true" aria-labelledby="modal-h" hidden></div>
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden></div>
 <div class="menu" id="row-menu" role="menu" hidden></div>
@@ -2225,6 +2263,7 @@ function infoCard(){
     appCard('sheet')+
     cta+
     '<button class="'+(cta?'modal-later':'modal-cta')+'" type="button" data-modal-close>Got it</button>'+
+    '<p class="onote center"><button class="linky" type="button" id="ppOpen">Privacy &amp; data choices</button></p>'+
   '</div>';
 }
 
@@ -2889,13 +2928,12 @@ function renderChat(id){
   markSeen(ev.id, msgs.length);        /* viewing the thread clears the badge */
   var body = msgs.length
     ? '<div class="thread">'+msgs.map(function(m,mi){
-        /* tapping a bubble opens its options: the poster edits/deletes their
-           own, the host deletes anyone's */
-        var acts = ev.role==='hosting' || m.isYou;
+        /* every bubble opens its options on tap - copy for anyone, edit for
+           the poster, delete for the poster or the host */
         return '<div class="msg'+(m.isYou?' me':'')+'">'+
           (m.isYou?'':img(m.fromAvatarUrl,''))+
-          '<div class="bub"'+(acts?' data-msg="'+mi+'" role="button" tabindex="0" '+
-            'aria-label="Message options"':'')+'>'+
+          '<div class="bub" data-msg="'+mi+'" role="button" tabindex="0" '+
+            'aria-label="Message options">'+
             '<span class="who2">'+(m.isYou?'You':h(m.fromName))+'</span>'+
             (m.imageUrl?'<img class="chat-img" src="'+h(m.imageUrl)+'" data-imgview="'+h(m.imageUrl)+
               '" data-imgby="'+h(fname(m.fromName))+'" alt="Photo from '+h(fname(m.fromName))+'">':'')+
@@ -4685,7 +4723,6 @@ function eventDock(id){
                             : (r.v==='create'||r.v==='edit') ? 'has-cbar'
                             : (r.v==='guests'||r.v==='photos'||r.v==='chat') ? '' : 'has-nav';
     if(!modal.hidden) document.body.classList.add('modal-open');   /* survives the reset */
-    if(CKY_OK && r.v==='home') document.body.classList.add('cky-show');   /* consent lives on Home only */
     var cSheet=modal.querySelector('[data-claimfor]');
     if(cSheet && r.v==='event' && cSheet.dataset.claimfor===r.id){
       var cInp=document.getElementById('claim-name'),
@@ -4745,6 +4782,7 @@ function eventDock(id){
       e.preventDefault();
       var act=mi.dataset.emenu, mid=menuEvent, mm=menuMsg;
       closeMenu();
+      if(act==='mcopy'){ if(mm) copyMsg(mm.id, mm.idx); return; }
       if(act==='medit'){ if(mm) openMsgEdit(mm.id, mm.idx); return; }
       if(act==='mdelete'){ if(mm) delMsg(mm.id, mm.idx); return; }
       if(act==='edit')   go('#edit/'+mid);
@@ -5953,20 +5991,29 @@ function eventDock(id){
     }
     copyLink(url);
   }
-  function copyLink(url){
+  /* clipboard with the execCommand fallback; the last resort shows the text
+     so it can at least be selected by hand */
+  function copyText(val, okMsg){
     var legacy=function(){
       var ta=document.createElement('textarea');
-      ta.value=url; ta.style.cssText='position:fixed;opacity:0';
+      ta.value=val; ta.style.cssText='position:fixed;opacity:0';
       document.body.appendChild(ta); ta.select();
       var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
       ta.remove();
-      if(ok) toast('Link copied'); else toast(url,'',8000);
+      if(ok) toast(okMsg); else toast(val,'',8000);
     };
     if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(url)
-        .then(function(){ toast('Link copied'); })
+      navigator.clipboard.writeText(val)
+        .then(function(){ toast(okMsg); })
         .catch(legacy);
     } else legacy();
+  }
+  function copyLink(url){ copyText(url,'Link copied'); }
+  function copyMsg(id, idx){
+    var ev=findEvent(id), m=ev && ev.messages && ev.messages[idx];
+    if(!m) return;
+    if(m.text) copyText(m.text,'Message copied');
+    else if(m.imageUrl) copyText(m.imageUrl,'Image link copied');
   }
 
   /* ---------- chat ---------- */
@@ -6172,13 +6219,67 @@ function eventDock(id){
     }
   }
 
-  /* CookieYes shows only on Home, and only after the visitor's first tap -
-     never over the invite they just opened */
-  var CKY_OK=false;
-  document.addEventListener('click', function(){
-    CKY_OK=true;
-    if(route().v==='home') document.body.classList.add('cky-show');
-  }, { once:true, capture:true });
+  /* ---------- privacy panel (fronts CookieYes, whose UI never renders) ----
+     Same mechanism as index.html: the revisit button (captured, so CookieYes
+     never sees the click) or the info sheet's link toggles the panel; the
+     switch drives CookieYes's hidden opt-out checkbox + save button. A
+     checked CookieYes box means opted OUT - the inverse of the switch. */
+  (function(){
+    var panel=document.getElementById('privacyPanel');
+    var ppToggle=document.getElementById('ppAnalytics');
+    var ppNote=panel.querySelector('.pp-note');
+    var ppNoteDefault=ppNote.textContent;
+    var ckyBox=function(){ return document.querySelector('.cky-modal input[type="checkbox"], .cky-consent-container input[type="checkbox"]'); };
+    var ckySave=function(){
+      return document.querySelector('.cky-btn-preferences') ||
+        Array.prototype.find.call(document.querySelectorAll('.cky-modal button, .cky-consent-container button'),
+          function(b){ return /save/i.test(b.textContent); });
+    };
+    var syncPanel=function(){
+      var box=ckyBox();
+      if(box){
+        ppToggle.checked=!box.checked;
+        ppToggle.disabled=false;
+        ppNote.textContent=ppNoteDefault;
+      } else {
+        ppToggle.checked=false;
+        ppToggle.disabled=true;
+        ppNote.textContent='Our analytics tool has not loaded in this browser, so nothing is being tracked.';
+      }
+    };
+    document.addEventListener('click', function(e){
+      if(!e.isTrusted || !e.target.closest) return;   /* synthetic clicks on hidden CookieYes controls must not close the panel */
+      if(e.target.closest('.cky-btn-revisit-wrapper, #ppOpen')){
+        e.preventDefault(); e.stopPropagation();
+        if(e.target.closest('#ppOpen')) closeModal();  /* the info sheet sits above the panel */
+        syncPanel();
+        panel.hidden=!panel.hidden;
+      } else if(!panel.hidden && !e.target.closest('#privacyPanel')){
+        panel.hidden=true;
+      }
+    }, true);
+    document.getElementById('ppClose').addEventListener('click', function(){ panel.hidden=true; });
+    ppToggle.addEventListener('change', function(){
+      var want=!ppToggle.checked;   /* desired CookieYes opt-out state */
+      var box=ckyBox();
+      if(!box) return;
+      if(box.checked!==want) box.click();
+      var save=ckySave();
+      if(save) save.click();
+      setTimeout(function(){        /* verify against CookieYes's real state */
+        var b=ckyBox();
+        if(b && b.checked!==want && !want){
+          /* opting back IN doesn't commit through the hidden modal - erase the
+             stored opt-out and reload clean */
+          ['', '; domain='+location.hostname, '; domain=.'+location.hostname.replace(/^www\./,'')]
+            .forEach(function(d){ document.cookie='cookieyes-consent=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'+d; });
+          location.reload();
+          return;
+        }
+        if(b) ppToggle.checked=!b.checked;
+      }, 400);
+    });
+  })();
 
   /* ---------- message menu + edit ---------- */
   var menuMsg=null, MEDIT=null;
@@ -6189,8 +6290,9 @@ function eventDock(id){
     if(anchor===bub){ closeMenu(); return; }
     closeMenu();
     menu.innerHTML =
+      mItem('mcopy','copy', m.text ? 'Copy message' : 'Copy image link')+
       (m.isYou && m.text ? mItem('medit','pen','Edit message') : '')+
-      mItem('mdelete','trash','Delete message',1);
+      (ev.role==='hosting' || m.isYou ? mItem('mdelete','trash','Delete message',1) : '');
     menuMsg={ id: ev.id, idx: idx };
     anchor=bub; bub.setAttribute('aria-expanded','true');
     placeMenu(bub);

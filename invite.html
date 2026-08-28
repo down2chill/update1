@@ -65,6 +65,9 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 a{color:inherit;text-decoration:none}
 svg.i{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 :focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:6px}
+/* sheets receive programmatic focus for keyboard users - no ring on the card
+   itself, the controls inside keep theirs */
+.modal-card:focus-visible,.modal-card:focus{outline:none}
 .wrap{max-width:720px;margin:0 auto;padding:0 max(var(--pad),env(safe-area-inset-right)) 0 max(var(--pad),env(safe-area-inset-left))}
 .sp{flex:1}
 .center{text-align:center}
@@ -987,6 +990,8 @@ button.view-all{display:block;width:100%;text-align:center}
 .avdot{position:absolute;right:0;bottom:0;width:12px;height:12px;border-radius:50%;
   background:#9aa0b5;border:2.5px solid #fff;pointer-events:none}
 .avdot.ok{background:#10b981}
+.avdot.pend{background:#eaa53e}
+.ist.pend .idot{background:#eaa53e}
 .info-btn.pulse{animation:ipulse 2.4s ease-out infinite}
 @keyframes ipulse{
   0%{box-shadow:0 3px 12px rgba(40,40,120,.14),0 0 0 0 rgba(64,56,240,.35)}
@@ -1635,6 +1640,8 @@ function loadMe(){
   if(!ME.rsvp || typeof ME.rsvp !== 'object') ME.rsvp = {};
   if(typeof ME.verifiedPhone !== 'string') ME.verifiedPhone = '';
   if(typeof ME.verifyDeclined !== 'string') ME.verifyDeclined = '';
+  if(typeof ME.verifyPending !== 'string') ME.verifyPending = '';
+  if(typeof ME.verifyPendingAt !== 'number') ME.verifyPendingAt = 0;
   if(!ME.plus || typeof ME.plus !== 'object') ME.plus = {};
   return ME;
 }
@@ -1672,6 +1679,22 @@ function verifyDeclined(){
   var m = loadMe(), p = normPhone(m.phone);
   return !!p && m.verifyDeclined === p;
 }
+/* a send failed on OUR side (quota/billing): the number is parked and the
+   prompts go quiet until texting is back. Decays after two weeks so a stale
+   park never suppresses verification forever. */
+var PEND_MS = 14 * 86400000;
+function verifyPending(){
+  var m = loadMe(), p = normPhone(m.phone);
+  if(!p || m.verifyPending !== p) return false;
+  if(Date.now() - (m.verifyPendingAt || 0) > PEND_MS){
+    m.verifyPending = ''; m.verifyPendingAt = 0;   /* quiet decay - persisted on the next save */
+    return false;
+  }
+  return true;
+}
+/* service-wide, operator-fixable send failures - a personal throttle
+   (too-many-requests) or a bad number must NOT park anything */
+var SMS_OUTAGE = { 'auth/quota-exceeded':1, 'auth/billing-not-enabled':1, 'auth/operation-not-allowed':1 };
 /* the info button pulses until it has been opened once on this device */
 var INFO_KEY = 'd2c.info.v1';
 function infoSeen(){ try{ return !!localStorage.getItem(INFO_KEY); }catch(e){ return true; } }
@@ -1793,7 +1816,7 @@ function saveMe(){
         }
         m.linked = linkedProfiles().map(function(p){ return p.uid; });
         try{ localStorage.setItem(ME_KEY, JSON.stringify(m)); }catch(e){}
-        if(m.cloudLinked.length && !phoneVerified() && !verifyDeclined()) promptVerify();
+        if(m.cloudLinked.length && !phoneVerified() && !verifyDeclined() && !verifyPending()) promptVerify();
         else repaintMe();
       })
       .catch(function(e){ console.warn('profile sync failed', e); });
@@ -2090,12 +2113,18 @@ function infoBtn(mini){
   return '<button class="round-btn'+(mini?' mini':'')+' info-btn'+(infoSeen()?'':' pulse')+
     '" type="button" data-info aria-label="How Down2Chill works">'+ico('help')+'</button>';
 }
+/* dot + label: green verified, amber parked-for-later, gray this device */
+function dotState(){
+  return phoneVerified() ? [' ok','verified']
+       : verifyPending() ? [' pend','verification paused']
+       : ['','guest on this device'];
+}
 function profBtn(){
+  var ds = dotState();
   return infoBtn(true)+
-    '<a class="round-btn mini" href="#profile" data-nav aria-label="Your profile - '+
-      (phoneVerified()?'verified':'guest on this device')+'">'+
+    '<a class="round-btn mini" href="#profile" data-nav aria-label="Your profile - '+ds[1]+'">'+
     '<img class="me-mini" src="'+h(meAvatar())+'" alt="">'+
-    '<span class="avdot'+(phoneVerified()?' ok':'')+'"></span></a>';
+    '<span class="avdot'+ds[0]+'"></span></a>';
 }
 /* the web is only the scheduled half of Down2Chill - each surface carries one
    compact nudge toward the app, where the right-now invites live */
@@ -2124,12 +2153,16 @@ function infoCard(){
   var m = loadMe(), st = authState(), fn = fname(m.name||''), live = smsLive();
   var tel = live ? toE164(m.phone) : m.phone;
   var n = phoneVerified() ? linkedProfiles().length : 0;
+  var pend = st!=='verified' && verifyPending();
   var stTitle = st==='verified' ? 'You’re '+h(fn)+' · verified'
+              : pend && fn      ? 'You’re '+h(fn)+' · verification paused'
               : st==='named'    ? 'You’re '+h(fn)+' · this device only'
               :                   'You’re a guest right now';
   var stSub = st==='verified'
       ? 'Every device that verifies '+h(tel)+' shares this account'+
         (n?' · linked to '+n+' other'+(n===1?'':'s'):'')+'.'
+      : pend
+      ? 'Texting is down on our side - your number is saved, and everything keeps working meanwhile.'
       : st==='named'
       ? 'Your name and RSVPs live in this browser until you verify your number.'
       : 'This device got its own private account the moment you opened the page. No sign-up needed.';
@@ -2142,7 +2175,7 @@ function infoCard(){
     '<button class="modal-x" type="button" data-modal-close aria-label="Close">'+ico('x')+'</button>'+
     '<div class="modal-ic">'+ico('help')+'</div>'+
     '<h3 id="modal-h">How events work</h3>'+
-    '<div class="ist'+(st==='verified'?' ok':'')+'"><span class="idot"></span>'+
+    '<div class="ist'+(st==='verified'?' ok':pend?' pend':'')+'"><span class="idot"></span>'+
       '<span class="istx"><b>'+stTitle+'</b><span>'+stSub+'</span></span></div>'+
     '<ul class="ilist">'+
       '<li>No passwords here. RSVP, chat, and add photos right away - everything saves to this device automatically.</li>'+
@@ -2151,8 +2184,9 @@ function infoCard(){
       '<li>Not verifying is fine too - things just stay on this device.</li>'+
     '</ul>'+
     '<p class="onote center">'+(location.hash.indexOf('#profile')===0
-      ? 'The dot on the profile button on every other page: green = verified, gray = this device only.'
-      : 'The dot on your profile picture up top: green = verified, gray = this device only.')+'</p>'+
+      ? 'The dot on the profile button on every other page: green = verified, '
+      : 'The dot on your profile picture up top: green = verified, ')+
+      (pend?'amber = confirming later, ':'')+'gray = this device only.</p>'+
     appCard('sheet')+
     cta+
     '<button class="'+(cta?'modal-later':'modal-cta')+'" type="button" data-modal-close>Got it</button>'+
@@ -2287,10 +2321,9 @@ function renderHome(tab,q,open){
           'aria-expanded="'+!!open+'" aria-label="Search events">'+ico('search')+'</button>'+
         /* filters is parked for now - unhide when it does something */
         '<button class="round-btn" type="button" aria-label="Filters" style="display:none">'+ico('sliders')+'</button>'+
-        '<a class="round-btn" href="#profile" data-nav aria-label="Your profile - '+
-          (phoneVerified()?'verified':'guest on this device')+'">'+
+        '<a class="round-btn" href="#profile" data-nav aria-label="Your profile - '+dotState()[1]+'">'+
           '<img class="me-mini" src="'+h(meAvatar())+'" alt="">'+
-          '<span class="avdot'+(phoneVerified()?' ok':'')+'"></span></a>'+
+          '<span class="avdot'+dotState()[0]+'"></span></a>'+
       '</div></div>'+
       '<div class="segs" role="tablist">'+
         ['upcoming','hosting','past'].map(function(t){
@@ -2429,7 +2462,16 @@ function vibeShow(ev){
 function renderEvent(id){
   var ev=findEvent(id); if(!ev) return renderHome();
   var dp=dparts(ev.dateISO), c=ev.counts;
-  var gs=ev.guestPreview.slice(0,5), extra=Math.max(0, c.going-gs.length);
+  /* guestPreview is only a creation-time snapshot - people who joined later
+     never land in it. Once the live guest stream is in, show the real going
+     list (up to 5 faces, then +N); the snapshot only covers the first paint. */
+  var gb=ev.guests ? guestBuckets(ev) : null;
+  var gs=gb && gb.going.length
+    ? gb.going.slice(0,5).map(function(g){
+        return { name: g.name, avatarUrl: g.avatarUrl, isHost: g.isHost };
+      })
+    : ev.guestPreview.slice(0,5);
+  var extra=Math.max(0, Math.max(c.going, gb?gb.going.length:0)-gs.length);
   var total=c.going+c.maybe+c.cant;
 
   var photosBlock = ev.photos
@@ -4391,7 +4433,8 @@ function mergeCard(){
 function renderProfile(){
   var m = loadMe(), linked = linkedProfiles(), evs = myEvents().length;
   var vnow = !!normPhone(m.phone) && !phoneVerified() && smsLive();
-  var vlab = linked.length || (phoneMatches().length ? 'Verify to link ' + phoneMatches().length
+  var vlab = linked.length || (!phoneVerified() && verifyPending() ? 'Verification paused'
+           : phoneMatches().length ? 'Verify to link ' + phoneMatches().length
            : vnow ? 'Tap to verify' : 'None yet');
   return '<div class="wrap narrow">' +
     '<header class="top">' +
@@ -4416,7 +4459,8 @@ function renderProfile(){
     '</div>' +
     '<section class="sec"><div class="sec-h"><h2>Account</h2></div><div class="scard">' +
       '<div class="srow noact"><span class="sic">' + ico('lock') + '</span><b>Status</b>' +
-        '<span class="sval">' + (phoneVerified() ? 'Verified' : 'Guest · this device') + '</span></div>' +
+        '<span class="sval">' + (phoneVerified() ? 'Verified'
+          : verifyPending() ? 'Verification paused' : 'Guest · this device') + '</span></div>' +
       '<div class="srow noact"><span class="sic">' + ico('person') + '</span><b>Visitor ID</b>' +
         '<span class="sval mono">' + h(m.uid) + '</span></div>' +
       '<div class="srow noact"><span class="sic">' + ico('cal-p') + '</span><b>Events opened</b>' +
@@ -4876,6 +4920,9 @@ function eventDock(id){
       var so=sb.textContent;
       sb.disabled=true; sb.textContent='Sending…';
       D2C.smsSend(tel).then(function(){
+        /* a successful send means texting is back - any parked state ends */
+        var mOk=loadMe();
+        if(mOk.verifyPending){ mOk.verifyPending=''; mOk.verifyPendingAt=0; saveMe(); }
         var first=VF.stage!=='code'; VF.stage='code';
         if(first && !modal.hidden){
           modal.innerHTML=verifyCard();
@@ -4885,6 +4932,9 @@ function eventDock(id){
         toast('Code texted to '+tel);
       }).catch(function(e){
         sb.disabled=false; sb.textContent=so;
+        /* an outage parks the number - unless a code is already out, in
+           which case the old code may still work, so keep that stage */
+        if(SMS_OUTAGE[e && e.code] && VF.stage!=='code'){ smsParked(); return; }
         toast(smsErr(e),'err',5200);
       });
       return;
@@ -5268,6 +5318,25 @@ function eventDock(id){
     app.innerHTML=renderProfile(); chrome.innerHTML=bottomNav('profile');
   }
   repaintMe = repaintProfile;
+  /* texting itself is down (quota/billing): park the number with an honest
+     card instead of a raw error, and let the prompts go quiet. Verification
+     grants nothing until a real code is confirmed, so parking is pure UX. */
+  function smsParked(){
+    var m=loadMe();
+    m.verifyPending=normPhone(m.phone); m.verifyPendingAt=Date.now();
+    saveMe();
+    modal.innerHTML='<div class="modal-card claim">'+
+      '<button class="modal-x" type="button" data-modal-close aria-label="Close">'+ico('x')+'</button>'+
+      '<div class="modal-ic">'+ico('check')+'</div>'+
+      '<h3 id="modal-h">Number saved</h3>'+
+      '<p>Texting is taking a break on our side. <b>'+h(toE164(m.phone))+'</b> is saved and '+
+        'everything keeps working - we’ll ask you to confirm it once texting is back.</p>'+
+      '<button class="modal-cta" type="button" data-modal-close>Got it</button>'+
+    '</div>';
+    modal.hidden=false; document.body.classList.add('modal-open');
+    modalShown();
+    repaintMe();
+  }
   /* the header ?-button: open the how-it-works sheet, retire the pulse */
   function openInfo(){
     try{ localStorage.setItem(INFO_KEY,'1'); }catch(e){}
@@ -5313,6 +5382,7 @@ function eventDock(id){
     var m=loadMe();
     m.verifiedPhone = tel ? normPhone(tel) : normPhone(m.phone);
     m.verifyDeclined = '';
+    m.verifyPending = ''; m.verifyPendingAt = 0;
     saveMe(); closeModal();
     if(!phoneVerified()){   /* confirmed number != the one saved now */
       toast('That code was for a different number - save again to re-verify','err',5200);
@@ -5334,7 +5404,7 @@ function eventDock(id){
     var m=loadMe();
     if(!normPhone(m.phone)) return;
     if(!phoneVerified()){
-      if(!verifyDeclined() && (smsLive() || phoneMatches().length)) promptVerify();
+      if(!verifyDeclined() && !verifyPending() && (smsLive() || phoneMatches().length)) promptVerify();
       return;
     }
     if(phoneMatches().length) finishLink();
@@ -5580,7 +5650,7 @@ function eventDock(id){
     /* an adopted number that duplicates an existing account links right away
        (behind the 2FA-style check); otherwise offer the photo/phone follow-up */
     var m2=loadMe();
-    if(normPhone(m2.phone) && !phoneVerified() && !verifyDeclined() &&
+    if(normPhone(m2.phone) && !phoneVerified() && !verifyDeclined() && !verifyPending() &&
        (phoneMatches().length || smsLive())){
       promptVerify();
     } else if(!m2.phone || !m2.photo){

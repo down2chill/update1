@@ -1894,7 +1894,7 @@ function docToModel(id, d){
     capacity: d.capacity || "-", capacityMode: d.capacityMode || "", capacityMax: d.capacityMax || 0,
     entry: d.entry || "-", entryMode: d.entryMode || "", entryNote: d.entryNote || "",
     inviteType: d.inviteType || "Invite only",
-    join: d.join || "", banned: d.banned || [],
+    join: d.join || "", post: d.post || "", banned: d.banned || [],
     /* step-3 settings ride along so both data modes keep every field */
     plusOnes: d.plusOnes || "", plusOnesMode: d.plusOnesMode || "", plusOnesMax: d.plusOnesMax || 0,
     invitedUids: d.invitedUids || [], invitedGuests: d.invitedGuests || [],
@@ -2474,9 +2474,11 @@ function renderEvent(id){
   var extra=Math.max(0, Math.max(c.going, gb?gb.going.length:0)-gs.length);
   var total=c.going+c.maybe+c.cant;
 
+  var mayPost = canPost(ev);
   var photosBlock = ev.photos
-    ? '<div class="strip"><button class="add-photo" type="button" data-addphoto="'+ev.id+'">'+
-        ico('cam-plus')+'<b>Add Photo</b><small>Share memories from this event</small></button>'+
+    ? '<div class="strip">'+
+        (mayPost ? '<button class="add-photo" type="button" data-addphoto="'+ev.id+'">'+
+        ico('cam-plus')+'<b>Add Photo</b><small>Share memories from this event</small></button>' : '')+
         ev.photos.slice(0,8).map(function(p,i){
           return '<button class="sph" type="button" data-ph="'+i+'" aria-label="Open photo '+(i+1)+
             ' of '+ev.photos.length+'">'+img(p.thumbUrl,'Photo '+(i+1)+' by '+p.byName)+'</button>';
@@ -2588,8 +2590,9 @@ function renderEvent(id){
       '</section>'+
       '<section class="sec"><div class="sec-h"><h2>Photos</h2>'+
         '<a class="link" href="#photos/'+ev.id+'" data-nav>View all ('+ev.photoCount+')</a></div>'+
-        '<div class="btn-row"><button class="ghost" type="button" data-addphoto="'+ev.id+'">'+
-            ico('cam-plus')+'Add Photo</button>'+
+        '<div class="btn-row">'+
+          (mayPost ? '<button class="ghost" type="button" data-addphoto="'+ev.id+'">'+
+            ico('cam-plus')+'Add Photo</button>' : '')+
           '<button class="ghost" type="button" data-share-kind="album" data-share-id="'+ev.id+'">'+
             ico('share')+'Share Album</button></div>'+
         photosBlock+
@@ -2816,8 +2819,9 @@ function renderPhotos(id){
     '<h1 class="title">Photos</h1>'+
     '<p class="pmeta">'+(ev.photos?ev.photos.length:ev.photoCount)+' photos from '+h(ev.title)+
       (ev.lastPhotoLabel?' \u00B7 Last added '+h(ev.lastPhotoLabel):'')+'</p>'+
-    '<div class="btn-row"><button class="ghost" type="button" data-addphoto="'+ev.id+'">'+
-        ico('cam-plus')+'Add Photo</button>'+
+    '<div class="btn-row">'+
+      (canPost(ev) ? '<button class="ghost" type="button" data-addphoto="'+ev.id+'">'+
+        ico('cam-plus')+'Add Photo</button>' : '')+
       '<button class="ghost" type="button" data-share-kind="album" data-share-id="'+ev.id+'">'+
         ico('share')+'Share Album</button></div>'+
     grid+'</div>';
@@ -2870,9 +2874,11 @@ function renderChat(id){
   '</div>';
 }
 function composer(id){
+  var cev=findEvent(id);
   return '<div class="composer"><div class="composer-in">'+
+    (cev && !canPost(cev) ? '' :
     '<button class="attach" type="button" id="msg-attach" data-event="'+id+'" aria-label="Send a photo">'+
-      ico('image')+'</button>'+
+      ico('image')+'</button>')+
     '<input type="text" id="msg-in" placeholder="Message the group\u2026" aria-label="Write a message" '+
       'autocomplete="off" data-event="'+id+'">'+
     '<button type="button" id="msg-send" data-event="'+id+'" aria-label="Send" disabled>'+ico('nav')+'</button>'+
@@ -2959,7 +2965,7 @@ function lastSettings(){
 function rememberSettings(d){
   try{
     localStorage.setItem(LAST_KEY, JSON.stringify({
-      join:d.join, capMode:d.capMode, capacity:d.capacity,
+      join:d.join, post:d.post, capMode:d.capMode, capacity:d.capacity,
       plusMode:d.plusMode, plusN:d.plusN, rsvpMode:d.rsvpMode,
       entryMode:d.entryMode, entryNote:d.entryNote,
       reminders:d.reminders, remN:d.remN, remUnit:d.remUnit,
@@ -2974,7 +2980,7 @@ function blankDraft(){
            venue:'', address:'', about:'', vibes:[], vibeCustom:'',
            /* step 3 - 'open' is the first-time default */
            capMode:'custom', capacity:30,
-           join:'open',
+           join:'open', post:'guests',
            plusMode:'one', plusN:2,
            /* same day as the event until the host sets it themselves */
            rsvpMode:'custom', rsvpBy:start, rsvpTouched:false,
@@ -3190,6 +3196,31 @@ function joinOpt(k){
   for(var i = 0; i < JOIN_OPTS.length; i++) if(JOIN_OPTS[i].k === k) return JOIN_OPTS[i];
   return JOIN_OPTS[1];
 }
+/* ---- who can post photos & chat pictures: rungs the code can actually
+   check - event membership, a Going RSVP, or the host alone ---- */
+var POST_OPTS = [
+  { k:'guests', ic:'users', t:'Everyone on the Event', lab:'Everyone on the event',
+    s:'Anyone who can join can add photos and send pictures in the chat.' },
+  { k:'going',  ic:'check', t:'Going Only',            lab:'Going only',
+    s:'Only guests who RSVP’d Going can post - everyone else can still look.' },
+  { k:'host',   ic:'lock',  t:'Host Only',             lab:'Host only',
+    s:'Only you add photos and pictures - the album stays curated.' }
+];
+function postOpt(k){
+  for(var i = 0; i < POST_OPTS.length; i++) if(POST_OPTS[i].k === k) return POST_OPTS[i];
+  return POST_OPTS[0];
+}
+/* events from before this setting have no post field - they behave like
+   'guests', exactly what they did before */
+function postMode(ev){ return (ev.post === 'going' || ev.post === 'host') ? ev.post : 'guests'; }
+function canPost(ev){
+  if(ev.role === 'hosting') return true;
+  if(!canJoin(ev)) return false;
+  var p = postMode(ev);
+  if(p === 'host') return false;
+  if(p === 'going') return myRsvp(ev.id) === 'going';
+  return true;
+}
 var RSVP_OPTS = [
   { k:'none',   t:'No Deadline' }, { k:'week', t:'1 Week Before' },
   { k:'3days',  t:'3 Days Before' }, { k:'1day', t:'1 Day Before' },
@@ -3201,7 +3232,7 @@ var REM_PRESETS = [ ['10080','1 Week Before'], ['1440','1 Day Before'], ['60','1
 /* which cards are folded open - view state, not part of the draft. All start
    CLOSED: the quick-pick header handles the common cases, the chevron opens
    the full editor for anyone who wants every option. */
-var SEC_OPEN = { cap:0, join:0, plus:0, rsvp:0, entry:0, rem:0 };
+var SEC_OPEN = { cap:0, join:0, post:0, plus:0, rsvp:0, entry:0, rem:0 };
 
 /* ---------- derived labels: one value, two presentations ---------- */
 function capLabel(d){ return d.capMode === 'unlimited' ? 'Unlimited' : d.capacity + ' guests'; }
@@ -3320,6 +3351,18 @@ function cardJoin(d){
     quickSel('join','Who Can Join', joinOpt(d.join).lab,
       JOIN_OPTS.map(function(o){ return o.lab; })));
 }
+function cardPost(d){
+  return secCard('post','cam','Who Can Post', postOpt(d.post).lab,
+    '<div class="opts" role="radiogroup" aria-label="Who Can Post">' +
+      POST_OPTS.map(function(o){
+        return optRow('post', o.k, (d.post || 'guests') === o.k, o.t, o.s, o.ic);
+      }).join('') +
+    '</div>' +
+    '<p class="onote">Covers event photos and chat pictures. Chat messages follow Who Can Join, ' +
+      'and you can always remove anything a guest posts.</p>',
+    quickSel('post','Who Can Post', postOpt(d.post).lab,
+      POST_OPTS.map(function(o){ return o.lab; })));
+}
 function cardPlus(d){
   return secCard('plus','user-plus','Plus Ones', plusLabel(d),
     '<div class="opts" role="radiogroup" aria-label="Plus Ones">' +
@@ -3413,7 +3456,7 @@ function step3Body(){
   return '<section class="full"><h2 class="fld">Guest Settings</h2>' +
       '<p class="fsub">Tap a row for the common choices - the arrow opens every option.</p></section>' +
     '<div class="s3cards">' +
-      cardJoin(d) + cardCapacity(d) + cardPlus(d) + cardRsvp(d) + cardEntry(d) +
+      cardJoin(d) + cardPost(d) + cardCapacity(d) + cardPlus(d) + cardRsvp(d) + cardEntry(d) +
     '</div>' +
     '<section class="full"><h2 class="fld">Reminders</h2>' +
       '<p class="fsub">Keep your guests in the loop.</p></section>' +
@@ -3433,6 +3476,8 @@ function applyP2(key, v){
     else { d.capMode = 'custom'; d.capacity = parseInt(v, 10) || d.capacity; }
   } else if(key === 'join'){
     JOIN_OPTS.forEach(function(o){ if(o.lab === v) d.join = o.k; });
+  } else if(key === 'post'){
+    POST_OPTS.forEach(function(o){ if(o.lab === v) d.post = o.k; });
   } else if(key === 'plus'){
     if(v === 'Not allowed') d.plusMode = 'none';
     else if(v === 'Allowed') d.plusMode = 'one';
@@ -3924,6 +3969,7 @@ function eventToDraft(ev){
   d.capMode  = ev.capacityMode || (/unlimited|no limit/i.test(ev.capacity || '') ? 'unlimited' : 'custom');
   d.capacity = ev.capacityMax || numOf(ev.capacity, 30);
   d.join     = joinMode(ev);
+  d.post     = postMode(ev);
   d.plusMode = ev.plusOnesMode || (/not allowed/i.test(ev.plusOnes || '') ? 'none' : 'one');
   d.plusN    = ev.plusOnesMax > 1 ? ev.plusOnesMax : 2;
   d.rsvpMode = ev.rsvpMode || (ev.rsvpBy ? 'custom' : 'none');
@@ -3983,6 +4029,7 @@ function settingsPatch(d){
     entry: entryLabel(d), entryMode: d.entryMode, entryNote: d.entryNote.trim(),
     /* one ladder - the legacy pair is derived so older readers stay coherent */
     join: d.join,
+    post: d.post || 'guests',
     inviteType: d.join === 'open' ? 'Open Invite'
               : d.join === 'public' ? 'Public Link' : 'Invite Only',
     plusOnes: plusLabel(d), plusOnesMode: d.plusMode, plusOnesMax: plusMax(d),
@@ -4670,7 +4717,12 @@ function eventDock(id){
     var addp=t.closest('[data-addphoto]');
     if(addp){
       var aev=findEvent(addp.dataset.addphoto);
-      if(aev && !canJoin(aev)){ toast('Only invited guests can add photos.','err',4000); return; }
+      if(aev && !canPost(aev)){
+        toast(!canJoin(aev) ? 'Only invited guests can add photos.'
+             : postMode(aev)==='host' ? 'Only the host adds photos on this event.'
+             : 'Only guests who are Going can post here.','err',4200);
+        return;
+      }
       if(window.D2C && D2C.pickPhoto) D2C.pickPhoto(addp.dataset.addphoto);
       else toast('Connect Firebase to add photos.','err');
       return;
@@ -5854,6 +5906,11 @@ function eventDock(id){
   function sendImg(id){
     var mev=findEvent(id);
     if(mev && !canJoin(mev)){ toast('Only invited guests can chat on this event.','err',4000); return; }
+    if(mev && !canPost(mev)){
+      toast(postMode(mev)==='host' ? 'Only the host can send pictures on this event.'
+           : 'Only guests who are Going can send pictures.','err',4000);
+      return;
+    }
     var input=document.getElementById('photo-input');
     input.value='';
     input.multiple=false;   /* the album picker may have left multi-select on */
@@ -6323,7 +6380,16 @@ function dim(m){ log(m, "dim"); }
 
 /* ---------------- init ---------------- */
 async function initFirebase(){
-  if(fb) return fb;
+  if(fb){
+    /* a client whose first sign-in failed (Anonymous disabled, flaky mobile
+       network) retries before every call - the rules require request.auth
+       for all writes, so staying signed-out means "permission denied" */
+    if(!fb.auth.currentUser){
+      try { const c = await fb.au.signInAnonymously(fb.auth); fb.uid = c.user.uid; }
+      catch(e){}
+    }
+    return fb;
+  }
   if(!KEY_OK) throw new Error(UNSUBBED(FB_CONFIG.apiKey)
     ? "apiKey is still the build placeholder - Cloudflare did not substitute it."
     : "apiKey is blank - set FB_CONFIG.apiKey.");
@@ -6435,7 +6501,11 @@ function pickPhoto(eventId){
       toast(files.length === 1 ? "Uploading photo\u2026"
             : "Uploading " + (i + 1) + " of " + files.length + "\u2026", "wait", 0);
       try { await uploadPhoto(eventId, files[i], () => {}, true); okN++; }
-      catch(e){ failN++; lastErr = e.message || ""; }
+      catch(e){
+        failN++;
+        lastErr = e.code === "storage/unauthorized"
+          ? "permission refused - reload once and retry" : (e.message || "");
+      }
     }
     /* one activity line for the whole batch instead of one per photo */
     if(okN) logActivity(eventId, "cam", okN === 1 ? "added a photo" : "added " + okN + " photos");

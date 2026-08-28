@@ -693,9 +693,10 @@ textarea.inp{height:auto;min-height:158px;padding:16px 18px 40px;line-height:1.6
 .vibe-show .vtile{border-radius:16px}
 .vibe-show .vibe:hover .vtile{transform:none}
 .vibe-show .vibe>span:last-child{font-size:12px;color:var(--ink-soft)}
-/* a Custom tile with a note behind it reads as tappable */
-.vibe-show .vcust{cursor:pointer}
-.vibe-show .vcust>span:last-child{color:var(--primary);font-weight:600}
+/* a Custom tile with a note behind it stays tappable but LOOKS like every
+   other tile - strip the button chrome (UA padding shifted the icon) and
+   let the label take the shared style, no primary tint */
+.vibe-show .vcust{cursor:pointer;padding:0;border:0;background:none;font:inherit;color:inherit}
 .vibe-show .vcust:hover .vtile{transform:scale(1.05)}
 
 /* settings rows */
@@ -4716,7 +4717,9 @@ function eventDock(id){
     if(curKey && curKeyChanged) scrolls[curKey]=app.scrollTop;
 
     closeLb();
-    if(curKeyChanged || !modal.querySelector('.claim')) closeModal();
+    /* live pages repaint on every stream notify - a confirm sheet must ride
+       that out like the claim sheets do, or its confirmFn dies mid-decision */
+    if(curKeyChanged || !modal.querySelector('.claim, [data-confirm-yes]')) closeModal();
     /* an event a banned viewer opens (or one that was deleted) is simply gone -
        never a dead end. Mid-view (the stream just dropped it, i.e. the host
        removed them) they land straight back on Home; arriving fresh at a dead
@@ -5919,9 +5922,16 @@ function eventDock(id){
     if(!r) return;
     if(r.reqType==='remove'){
       /* approving opens the standard remove confirm (erase toggle included);
-         the request doc rides along as reqDoc and clears on either outcome */
-      if(ok){ askRemoveGuest({ id:id, uid:r.targetUid||r.uid, name:r.targetName||r.name,
-                               reqDoc:r.docId }); return; }
+         the request doc rides along as reqDoc and clears on either outcome.
+         A remove request without its target uid must NEVER fall through to
+         the name-only invitation-withdraw path - that deletes their pending
+         row but bans nobody, so the person keeps full access to the event. */
+      if(ok){
+        var tu=r.targetUid||r.uid;
+        if(!tu){ toast('This request lost its guest - decline it, then remove them from the list yourself.','err',6000); return; }
+        askRemoveGuest({ id:id, uid:tu, name:r.targetName||r.name, reqDoc:r.docId });
+        return;
+      }
       if(STORE.mode==='live' && window.D2C && r.docId){
         D2C.declineRequest(ev.id, r.docId)
           .then(function(){ toast('Request declined'); })
@@ -7257,9 +7267,18 @@ async function banGuest(eventId, uid, name, erase){
     const s = d.data().status;
     if(/^(going|maybe|cant|pending)$/.test(s)) cut[s] = (cut[s] || 0) + 1;
   });
-  const patch = { banned: fs.arrayUnion(uid) };
+  /* ban every uid their rows carried, not just the one clicked - a person can
+     hold rows under more than one visitor id (second device, relinked phone) */
+  const uids = {}; uids[uid] = 1;
+  dead.forEach(d => { const u = d.data().uid; if(u) uids[u] = 1; });
+  const patch = { banned: fs.arrayUnion.apply(null, Object.keys(uids)) };
   Object.keys(cut).forEach(s => { patch["counts." + s] = fs.increment(-cut[s]); });
   await fs.updateDoc(evRef, patch);
+  /* the ban is what actually locks them out - never report success on faith */
+  const now = ((await fs.getDoc(evRef)).data() || {}).banned || [];
+  if(now.indexOf(uid) < 0) throw new Error("The removal didn't lock them out - this " +
+    "device isn't proving host rights. Verify your number in your profile, then " +
+    "remove them again.");
   let denied = dead.length - gone.length;
   if(erase) denied += await wipeGuestContent(evRef, fs, uid);
   if(denied) throw new Error("Removed and banned, but " + denied + " of their item(s) " +

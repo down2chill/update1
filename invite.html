@@ -944,6 +944,7 @@ button.view-all{display:block;width:100%;text-align:center}
 .me-fields .lab:first-child{margin-top:0}
 .cta.solo{flex:none;width:100%;margin-top:20px}
 .srow.noact{cursor:default}
+.srow.act{cursor:pointer}
 .sval.mono{font:600 12.5px/1.4 ui-monospace,Consolas,monospace;color:var(--muted);
   max-width:52%;overflow:hidden;text-overflow:ellipsis}
 .me-mini{width:100%;height:100%;border-radius:50%;object-fit:cover}
@@ -1547,6 +1548,7 @@ function loadMe(){
   if(!ME.claims || typeof ME.claims !== 'object') ME.claims = {};
   if(!ME.rsvp || typeof ME.rsvp !== 'object') ME.rsvp = {};
   if(typeof ME.verifiedPhone !== 'string') ME.verifiedPhone = '';
+  if(typeof ME.verifyDeclined !== 'string') ME.verifyDeclined = '';
   if(!ME.plus || typeof ME.plus !== 'object') ME.plus = {};
   return ME;
 }
@@ -1578,6 +1580,11 @@ function phoneMatches(){
 function phoneVerified(){
   var m = loadMe(), p = normPhone(m.phone);
   return !!p && m.verifiedPhone === p;
+}
+/* the user said "skip" for this exact number - never auto-ask it again */
+function verifyDeclined(){
+  var m = loadMe(), p = normPhone(m.phone);
+  return !!p && m.verifyDeclined === p;
 }
 function linkedProfiles(){ return phoneVerified() ? phoneMatches() : []; }
 /* real texts whenever Firebase got its keys - SMS does not need the events
@@ -1675,7 +1682,7 @@ function saveMe(){
         }
         m.linked = linkedProfiles().map(function(p){ return p.uid; });
         try{ localStorage.setItem(ME_KEY, JSON.stringify(m)); }catch(e){}
-        if(m.cloudLinked.length && !phoneVerified()) promptVerify();
+        if(m.cloudLinked.length && !phoneVerified() && !verifyDeclined()) promptVerify();
         else repaintMe();
       })
       .catch(function(e){ console.warn('profile sync failed', e); });
@@ -4132,33 +4139,38 @@ function finishCard(){
     '<button class="modal-later" type="button" data-modal-close>Skip for now</button>' +
   '</div>';
 }
-/* live builds go send -> code; offline demo keeps the single any-code card */
+/* one sheet, two stages: a consent card first (nothing is sent and no captcha
+   runs until the user agrees), then the code entry. Demo builds walk the same
+   stages without sending anything. */
 var VF = { stage: 'send' };
 function verifyCard(){
   var m = loadMe(), k = phoneMatches().length, live = smsLive();
   var tel = h(live ? toE164(m.phone) : m.phone);
   var why = k ? 'is already on ' + k + ' other account' + (k === 1 ? '' : 's') + '. ' +
-                'To link them into one, confirm the number is yours'
-              : 'is how friends and your other devices find you, so it has to really be yours';
+                'Confirm it\u2019s yours and they link into one'
+              : 'links your events across every device you use it on once it\u2019s verified';
   var head = '<div class="modal-card claim">' +
     '<button class="modal-x" type="button" data-modal-close aria-label="Close">' + ico('x') + '</button>' +
     '<div class="modal-ic">' + ico('lock') + '</div>' +
     '<h3 id="modal-h">Verify your number</h3>';
-  if(live && VF.stage === 'send')
+  if(VF.stage === 'send')
     return head +
-      '<p><b>' + tel + '</b> ' + why + ' - we\u2019ll text it a one-time code.</p>' +
+      '<p><b>' + tel + '</b> ' + why + '.</p>' +
+      '<p class="fsub">' + (live
+        ? 'Tap below and we\u2019ll text that number a one-time code (after a quick robot check - standard message rates apply). '
+        : 'Demo build - no text is really sent. ') +
+        'Skipping keeps everything working; accounts just aren\u2019t linked.</p>' +
       '<button class="modal-cta" type="button" data-sms-send>Text me the code</button>' +
-      '<button class="modal-later" type="button" data-modal-close>Not now</button>' +
+      '<button class="modal-later" type="button" data-vskip>Skip for now</button>' +
     '</div>';
   return head +
-    '<p>' + (live ? 'Enter the 6-digit code we texted to <b>' + tel + '</b>.'
-                  : '<b>' + tel + '</b> ' + why + ' with the code we texted you.') + '</p>' +
+    '<p>Enter the 6-digit code we texted to <b>' + tel + '</b>.</p>' +
     '<input class="inp vf" id="vf-code" type="text" inputmode="numeric" maxlength="6" ' +
       'autocomplete="one-time-code" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022">' +
     '<button class="modal-cta" type="button" data-verify>' + (k ? 'Verify & Link' : 'Verify') + '</button>' +
     (live ? '<button class="modal-later" type="button" data-sms-send>Resend the code</button>' : '') +
     '<button class="modal-later" type="button" data-modal-close>Not now</button>' +
-    (live ? '' : '<p class="onote center">Demo build - no text is actually sent, any 6 digits work.</p>') +
+    (live ? '' : '<p class="onote center">Demo: any 6 digits work.</p>') +
   '</div>';
 }
 /* candidates + current picks, set by finishLink before the sheet opens */
@@ -4193,6 +4205,9 @@ function mergeCard(){
 }
 function renderProfile(){
   var m = loadMe(), linked = linkedProfiles(), evs = myEvents().length;
+  var vnow = !!normPhone(m.phone) && !phoneVerified() && smsLive();
+  var vlab = linked.length || (phoneMatches().length ? 'Verify to link ' + phoneMatches().length
+           : vnow ? 'Tap to verify' : 'None yet');
   return '<div class="wrap narrow">' +
     '<header class="top">' +
       '<a class="icon-btn" href="#home" data-back="home" aria-label="Back to events">' + ico('back') + '</a>' +
@@ -4219,9 +4234,9 @@ function renderProfile(){
         '<span class="sval mono">' + h(m.uid) + '</span></div>' +
       '<div class="srow noact"><span class="sic">' + ico('cal-p') + '</span><b>Events opened</b>' +
         '<span class="sval">' + evs + '</span></div>' +
-      '<div class="srow noact"><span class="sic">' + ico('phone') + '</span><b>Linked accounts</b>' +
-        '<span class="sval">' + (linked.length ||
-          (phoneMatches().length ? 'Verify to link ' + phoneMatches().length : 'None yet')) + '</span></div>' +
+      '<div class="srow' + (vnow ? ' act" data-verifynow role="button" tabindex="0"' : ' noact"') +
+        '><span class="sic">' + ico('phone') + '</span><b>Linked accounts</b>' +
+        '<span class="sval">' + vlab + '</span></div>' +
     '</div></section>' +
     (linked.length ?
       '<section class="sec"><div class="sec-h"><h2>Linked accounts</h2></div>' +
@@ -4568,10 +4583,11 @@ function eventDock(id){
       return;
     }
 
+    if(t.closest('[data-verifynow]')){ promptVerify(); return; }
     if(t.closest('[data-mephoto]')){ pickMePhoto(); return; }
     if(t.closest('[data-mesave]')){
       saveMe(); propagateMe(); toast('Profile saved'); repaintProfile();
-      checkPhoneLink(true); return;   /* Save Profile always re-verifies */
+      checkPhoneLink(); return;
     }
     var padj=t.closest('[data-plusadj]');
     if(padj && !padj.disabled){
@@ -4610,9 +4626,20 @@ function eventDock(id){
       toast('Profile updated');
       checkPhoneLink(); return;
     }
+    if(t.closest('[data-vskip]')){
+      var md=loadMe(); md.verifyDeclined=normPhone(md.phone);
+      saveMe(); closeModal();
+      toast('Skipped - you can verify anytime from your profile','',4500);
+      repaintMe(); return;
+    }
     var sb=t.closest('[data-sms-send]');
     if(sb){
       if(sb.disabled) return;
+      if(!smsLive()){                    /* demo: nothing to send, go to the code step */
+        VF.stage='code'; modal.innerHTML=verifyCard();
+        var dc=document.getElementById('vf-code'); if(dc) dc.focus();
+        return;
+      }
       var tel=toE164(loadMe().phone);
       if(!/^\+\d{8,15}$/.test(tel)){ toast('Add a full phone number first','err'); return; }
       var so=sb.textContent;
@@ -4638,7 +4665,7 @@ function eventDock(id){
       if(vb.disabled) return;
       var vo=vb.textContent;
       vb.disabled=true; vb.textContent='Checking…';
-      D2C.smsCheck(vv).then(function(){ smsVerified(); })
+      D2C.smsCheck(vv).then(function(tel){ smsVerified(tel); })
         .catch(function(e){
           vb.disabled=false; vb.textContent=vo;
           toast(smsErr(e),'err',5200);
@@ -4976,25 +5003,38 @@ function eventDock(id){
   repaintMe = repaintProfile;
   promptVerify = function(){
     if(!modal.hidden) return;
-    VF.stage='send';
+    /* an SMS already on its way TO THIS NUMBER (sheet closed mid-flow)
+       resumes at the code step instead of burning a second text */
+    var pend = smsLive() && D2C.smsPending && D2C.smsPending();
+    VF.stage = (pend && pend === toE164(loadMe().phone)) ? 'code' : 'send';
     modal.innerHTML=verifyCard(); modal.hidden=false;
     document.body.classList.add('modal-open');
   };
-  /* the code matched (or demo build): record it, then link any duplicates */
-  function smsVerified(){
-    var m=loadMe(); m.verifiedPhone=normPhone(m.phone);
+  /* the code matched (or demo build): record the number Firebase actually
+     confirmed, then link any duplicates */
+  function smsVerified(tel){
+    var m=loadMe();
+    m.verifiedPhone = tel ? normPhone(tel) : normPhone(m.phone);
+    m.verifyDeclined = '';
     saveMe(); closeModal();
+    if(!phoneVerified()){   /* confirmed number != the one saved now */
+      toast('That code was for a different number - save again to re-verify','err',5200);
+      repaintMe(); return;
+    }
     if(phoneMatches().length) finishLink();
     else { toast('Number verified'); repaintMe(); }
   }
-  /* a saved number gets the SMS check; force (Save Profile) re-verifies even
-     an already-verified device so the flow stays testable. Offline demo only
-     bothers when there is actually something to link. */
-  function checkPhoneLink(force){
+  /* ask at most ONCE per number: a saved number that is neither verified nor
+     skipped gets the consent sheet (changing the number resets both, so a new
+     number asks once again); a verified duplicate links straight away.
+     Offline demo only bothers when there is actually something to link. */
+  function checkPhoneLink(){
     var m=loadMe();
     if(!normPhone(m.phone)) return;
-    if(smsLive() && (force || !phoneVerified())){ promptVerify(); return; }
-    if(!phoneVerified()){ if(phoneMatches().length) promptVerify(); return; }
+    if(!phoneVerified()){
+      if(!verifyDeclined() && (smsLive() || phoneMatches().length)) promptVerify();
+      return;
+    }
     if(phoneMatches().length) finishLink();
   }
   /* verified: union the views, then settle on one name */
@@ -5238,7 +5278,8 @@ function eventDock(id){
     /* an adopted number that duplicates an existing account links right away
        (behind the 2FA-style check); otherwise offer the photo/phone follow-up */
     var m2=loadMe();
-    if(normPhone(m2.phone) && !phoneVerified() && (phoneMatches().length || smsLive())){
+    if(normPhone(m2.phone) && !phoneVerified() && !verifyDeclined() &&
+       (phoneMatches().length || smsLive())){
       promptVerify();
     } else if(!m2.phone || !m2.photo){
       modal.innerHTML=finishCard(); modal.hidden=false;
@@ -5469,6 +5510,9 @@ function eventDock(id){
     if(modal.hidden) return;
     modal.hidden=true; modal.innerHTML='';
     document.body.classList.remove('modal-open');
+    /* drop any reCAPTCHA widget so its badge doesn't linger (keeps a sent
+       code confirmable - the sheet resumes at the code step) */
+    if(window.D2C && D2C.smsAbort) D2C.smsAbort();
   }
 
   /* ---------- lightbox ---------- */
@@ -5861,14 +5905,6 @@ const FB_CONFIG = {
   messagingSenderId: "202068437157",
   appId:             "__FIREBASE_APP_ID__"                 // substituted at build time
 };
-
-/* A copy deployed without the build's key substitution can still go live:
-   view-source the deployed invite.html, then paste its values once -
-   localStorage['d2c.fbcfg'] = JSON.stringify({apiKey:"...", appId:"..."})   */
-try {
-  const ov = JSON.parse(localStorage.getItem("d2c.fbcfg") || "null");
-  if(ov && ov.apiKey && FB_CONFIG.apiKey.startsWith("__")) Object.assign(FB_CONFIG, ov);
-} catch(e){}
 
 /* A placeholder is a non-empty string, so a plain truthiness test would treat
    an unsubstituted build as configured. These check for real values.        */
@@ -6610,7 +6646,7 @@ async function findByPhone(phone){
    Runs entirely in the browser - Firebase texts the code and verifies it,
    no Cloud Function anywhere. Needs the Phone provider + billing enabled
    in the Firebase console; the invisible reCAPTCHA proves a human asked. */
-let smsConf = null, smsCap = null;
+let smsConf = null, smsCap = null, smsTo = "";
 async function smsSend(e164){
   const { auth, au } = await initFirebase();
   /* a solved reCAPTCHA token is single-use, so rebuild the widget per send */
@@ -6621,12 +6657,20 @@ async function smsSend(e164){
   document.body.appendChild(host);
   smsCap = new au.RecaptchaVerifier(auth, host, { size: "invisible" });
   smsConf = await au.signInWithPhoneNumber(auth, e164, smsCap);
+  smsTo = e164;
 }
 async function smsCheck(code){
   if(!smsConf) throw { code: "auth/code-expired", message: "no code was sent" };
   const cred = await smsConf.confirm(code);   // wrong guess -> auth/invalid-verification-code
   smsConf = null;                             // the right code also signs the phone user in
+  smsAbort();                                 // widget done - take the badge with it
   return cred.user.phoneNumber;
+}
+/* remove the reCAPTCHA widget + badge; any sent code stays confirmable */
+function smsAbort(){
+  if(smsCap){ try{ smsCap.clear(); }catch(e){} smsCap = null; }
+  const h = document.getElementById("sms-captcha");
+  if(h) h.remove();
 }
 
 /* ---------------- live data ---------------- */
@@ -6757,7 +6801,8 @@ window.D2C = {
   requestJoin, suggestInvites, approveRequest, declineRequest,
   uploadCover, deleteFile, createEvent, updateEvent, deleteEvent,
   saveProfile, findByPhone, setRsvp, setPlus, propagateProfile, announceGuest, renameLinked,
-  smsSend, smsCheck, smsReady: () => KEY_OK,
+  smsSend, smsCheck, smsAbort, smsReady: () => KEY_OK,
+  smsPending: () => smsConf ? smsTo : "",     // E.164 a code is out to, else ""
   watchEvent(id){ watchingId = id; stopDetail(); watchDetail(id); },
   unwatchEvent(){ watchingId = null; stopDetail(); },
   reconnect: connectLive

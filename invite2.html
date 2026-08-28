@@ -1580,8 +1580,10 @@ function phoneVerified(){
   return !!p && m.verifiedPhone === p;
 }
 function linkedProfiles(){ return phoneVerified() ? phoneMatches() : []; }
-/* real texts only when the page is live AND Firebase got its keys */
-function smsLive(){ return STORE.mode === 'live' && !!window.D2C && D2C.smsReady && D2C.smsReady(); }
+/* real texts whenever Firebase got its keys - SMS does not need the events
+   stream, and gating on STORE.mode left the sheet mute if the snapshot was
+   slow or the copy missed build substitution */
+function smsLive(){ return !!window.D2C && D2C.smsReady && D2C.smsReady(); }
 var SMS_ERR = {
   'auth/invalid-phone-number': 'That doesn’t look like a real phone number.',
   'auth/too-many-requests': 'Too many tries from this device - wait a while, then try again.',
@@ -4569,7 +4571,7 @@ function eventDock(id){
     if(t.closest('[data-mephoto]')){ pickMePhoto(); return; }
     if(t.closest('[data-mesave]')){
       saveMe(); propagateMe(); toast('Profile saved'); repaintProfile();
-      checkPhoneLink(); return;
+      checkPhoneLink(true); return;   /* Save Profile always re-verifies */
     }
     var padj=t.closest('[data-plusadj]');
     if(padj && !padj.disabled){
@@ -4985,13 +4987,15 @@ function eventDock(id){
     if(phoneMatches().length) finishLink();
     else { toast('Number verified'); repaintMe(); }
   }
-  /* a saved number gets the SMS check; a verified duplicate then links.
-     Offline demo only bothers when there is actually something to link. */
-  function checkPhoneLink(){
+  /* a saved number gets the SMS check; force (Save Profile) re-verifies even
+     an already-verified device so the flow stays testable. Offline demo only
+     bothers when there is actually something to link. */
+  function checkPhoneLink(force){
     var m=loadMe();
     if(!normPhone(m.phone)) return;
-    if(phoneVerified()){ if(phoneMatches().length) finishLink(); return; }
-    if(phoneMatches().length || smsLive()) promptVerify();
+    if(smsLive() && (force || !phoneVerified())){ promptVerify(); return; }
+    if(!phoneVerified()){ if(phoneMatches().length) promptVerify(); return; }
+    if(phoneMatches().length) finishLink();
   }
   /* verified: union the views, then settle on one name */
   /* every linked account ends up with ONE name and ONE photo. The newest is
@@ -5234,7 +5238,7 @@ function eventDock(id){
     /* an adopted number that duplicates an existing account links right away
        (behind the 2FA-style check); otherwise offer the photo/phone follow-up */
     var m2=loadMe();
-    if(normPhone(m2.phone) && phoneMatches().length && !phoneVerified()){
+    if(normPhone(m2.phone) && !phoneVerified() && (phoneMatches().length || smsLive())){
       promptVerify();
     } else if(!m2.phone || !m2.photo){
       modal.innerHTML=finishCard(); modal.hidden=false;
@@ -5857,6 +5861,14 @@ const FB_CONFIG = {
   messagingSenderId: "202068437157",
   appId:             "__FIREBASE_APP_ID__"                 // substituted at build time
 };
+
+/* A copy deployed without the build's key substitution can still go live:
+   view-source the deployed invite.html, then paste its values once -
+   localStorage['d2c.fbcfg'] = JSON.stringify({apiKey:"...", appId:"..."})   */
+try {
+  const ov = JSON.parse(localStorage.getItem("d2c.fbcfg") || "null");
+  if(ov && ov.apiKey && FB_CONFIG.apiKey.startsWith("__")) Object.assign(FB_CONFIG, ov);
+} catch(e){}
 
 /* A placeholder is a non-empty string, so a plain truthiness test would treat
    an unsubstituted build as configured. These check for real values.        */

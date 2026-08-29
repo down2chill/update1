@@ -1362,10 +1362,17 @@ var GAV = 'data:image/svg+xml,'+encodeURIComponent(
   '<circle cx="70" cy="53" r="23" fill="none" stroke="#9ca3af" stroke-width="9"/>'+
   '<path d="M26 121a44 44 0 0 1 88 0" fill="none" stroke="#9ca3af" stroke-width="9" stroke-linecap="round"/>'+
   '</svg>');
-/* named-but-photoless profiles: their first initial on one of five colors.
-   The color hashes off the uid - random across users, stable for one, and
-   never stored anywhere: a real photo always wins, no name keeps GAV. */
-var AV_COLORS = ['#4a41f5', '#6d28d9', '#2563eb', '#16a34a', '#f97316'];
+/* named-but-photoless profiles: their first initial on one of five gradients
+   (purple, blue, mint, peach, pink - light top to deep bottom). The pick
+   hashes off the uid - random across users, stable for one, and never
+   stored anywhere: a real photo always wins, no name keeps GAV. */
+var AV_COLORS = [
+  ['#8B5CFF', '#6C3BFF'],   /* purple */
+  ['#7AA8FF', '#4E7BFF'],   /* blue */
+  ['#7EE8C1', '#4CCB96'],   /* mint */
+  ['#FFC78A', '#FFAA4C'],   /* peach */
+  ['#FFB0D0', '#F47CB5']    /* pink */
+];
 function letterAvatar(name, uid){
   var first = String(name || '').trim().split(/\s+/)[0] || '';
   if(!first) return '';
@@ -1373,9 +1380,13 @@ function letterAvatar(name, uid){
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   var hh = 0, s = String(uid || '');
   for(var i = 0; i < s.length; i++) hh = (hh * 31 + s.charCodeAt(i)) | 0;
+  var c = AV_COLORS[Math.abs(hh) % AV_COLORS.length];
   return 'data:image/svg+xml,'+encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140">'+
-    '<rect width="140" height="140" fill="'+AV_COLORS[Math.abs(hh) % AV_COLORS.length]+'"/>'+
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">'+
+    '<stop offset="0" stop-color="'+c[0]+'"/>'+
+    '<stop offset="1" stop-color="'+c[1]+'"/></linearGradient></defs>'+
+    '<rect width="140" height="140" fill="url(#g)"/>'+
     '<text x="70" y="70" dy=".36em" text-anchor="middle" '+
     'font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="72" '+
     'font-weight="700" fill="#fff">'+ch+'</text>'+

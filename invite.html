@@ -2331,6 +2331,21 @@ function mapsUrl(ev){
   return 'https://www.google.com/maps/search/?api=1&query='+
     encodeURIComponent(ev.address || ev.venue || '');
 }
+/* the Location card's picture: a stored image first, else the REAL road map
+   from the Maps Static API (keyed off the address at render time, so every
+   event - old or new - gets one without any doc writes; the module exposes
+   MAPS_KEY once Firebase config is live). Load failures - key missing, API
+   not enabled, offline - fall back to the drawn DEF_MAP placeholder. */
+function mapImg(ev){
+  var q = ev.address || ev.venue || '', key = window.MAPS_KEY || '';
+  var src = ev.mapUrl ||
+    (q && key ? 'https://maps.googleapis.com/maps/api/staticmap?center='+
+      encodeURIComponent(q)+'&zoom=15&size=640x360&scale=2&maptype=roadmap&key='+
+      encodeURIComponent(key) : '');
+  return '<img src="'+h(src || DEF_MAP)+'" alt="Map showing '+h(ev.venue)+
+    '" loading="lazy" decoding="async"'+
+    (src ? ' onerror="this.onerror=null;this.src=DEF_MAP"' : '')+'>';
+}
 function skel(msg){ return '<p class="skel">'+h(msg||'Loading\u2026')+'</p>'; }
 /* one wordmark, used by the home header and by every subpage's back row */
 function brandMark(){ return '<span class="logo">DOWN<i>2</i>CHILL<b>\u2726</b></span>'; }
@@ -2836,7 +2851,7 @@ function renderEvent(id){
       '</section>'+
       '<section class="sec"><div class="sec-h"><h2>Location</h2></div>'+
         '<div class="map-card"><div class="map">'+
-          img(ev.mapUrl||DEF_MAP,'Map showing '+ev.venue)+
+          mapImg(ev)+
           '<span class="pin">'+ico('pin-fill')+'</span>'+
           '<span class="map-label">'+h(ev.venue)+'</span></div>'+
           '<div class="map-foot"><div><b>'+h(ev.venue)+'</b><span>'+h(ev.address)+'</span></div>'+
@@ -7133,6 +7148,9 @@ const FB_CONFIG = {
    an unsubstituted build as configured. These check for real values.        */
 const KEY_OK = !!FB_CONFIG.apiKey && !FB_CONFIG.apiKey.startsWith("__");
 const APP_OK = /:web:/.test(FB_CONFIG.appId || "");
+/* the classic-script renderer builds Maps Static API urls off this - empty
+   (placeholder key) keeps it on the drawn DEF_MAP fallback */
+window.MAPS_KEY = KEY_OK ? FB_CONFIG.apiKey : "";
 const UNSUBBED = (v) => (v || "").startsWith("__");
 
 const SDK = "https://www.gstatic.com/firebasejs/12.3.0/";

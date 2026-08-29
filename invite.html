@@ -1364,8 +1364,10 @@ var GAV = 'data:image/svg+xml,'+encodeURIComponent(
   '</svg>');
 /* named-but-photoless profiles: their first initial on one of five gradients
    (purple, blue, mint, peach, pink - light top to deep bottom). The pick
-   hashes off the uid - random across users, stable for one, and never
-   stored anywhere: a real photo always wins, no name keeps GAV. */
+   hashes off the uid, or the whole name when there is no uid yet (imported
+   contacts, phone invitees) - random across users, stable for one, and
+   independent of the first letter so alphabetical lists stay varied.
+   A real photo always wins, no name keeps GAV. */
 var AV_COLORS = [
   ['#8B5CFF', '#6C3BFF'],   /* purple */
   ['#7AA8FF', '#4E7BFF'],   /* blue */
@@ -1378,8 +1380,10 @@ function letterAvatar(name, uid){
   if(!first) return '';
   var ch = String.fromCodePoint(first.codePointAt(0)).toUpperCase()
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  var hh = 0, s = String(uid || '');
+  var hh = 0, s = String(uid || '') || String(name || '');
   for(var i = 0; i < s.length; i++) hh = (hh * 31 + s.charCodeAt(i)) | 0;
+  /* avalanche - raw *31 collapses to charcode-sum mod 5, clumping similar names */
+  hh = Math.imul(hh ^ hh >>> 15, 2246822519); hh ^= hh >>> 13;
   var c = AV_COLORS[Math.abs(hh) % AV_COLORS.length];
   return 'data:image/svg+xml,'+encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140">'+
@@ -2430,22 +2434,28 @@ function evName(ev,name,uid){
 /* freshest name+face for a uid - profile edits beat the snapshot a row was
    written with: me (instant), the event doc's host stamp, any streamed row,
    then whatever the record itself says */
+/* stored generated defaults (letter tiles - incl. pre-seed-fix all-purple
+   stamps - and GAV) re-roll from the live name+uid; real photos pass through */
+function liveAv(o,uid){
+  if(!o.av || o.av.slice(0,18)==='data:image/svg+xml') o.av=letterAvatar(o.name,uid)||o.av;
+  return o;
+}
 function evProf(ev,uid,name,av){
   var o={ name:String(name||''), av:av||'' }, ls, l, i, j;
-  if(!uid) return o;
+  if(!uid) return liveAv(o,uid);
   if(myUids().indexOf(uid)>-1){
     var m=loadMe();
-    return { name:m.name||o.name, av:meAvatar()||o.av };
+    return liveAv({ name:m.name||o.name, av:meAvatar()||o.av },uid);
   }
-  if(!ev) return o;
+  if(!ev) return liveAv(o,uid);
   if(ev.hostUid && uid===ev.hostUid)
-    return { name:ev.hostName||o.name, av:ev.hostAvatarUrl||o.av };
+    return liveAv({ name:ev.hostName||o.name, av:ev.hostAvatarUrl||o.av },uid);
   ls=[ev.guests,ev.maybes,ev.cants,ev.waiting,ev.requests,ev.guestPreview];
   for(i=0;i<ls.length;i++){ l=ls[i]||[];
     for(j=0;j<l.length;j++) if(l[j].uid===uid)
-      return { name:l[j].name||o.name, av:l[j].avatarUrl||o.av };
+      return liveAv({ name:l[j].name||o.name, av:l[j].avatarUrl||o.av },uid);
   }
-  return o;
+  return liveAv(o,uid);
 }
 var _toastT=null;
 function toast(msg,kind,ms){

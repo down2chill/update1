@@ -2189,8 +2189,10 @@ function ico(id,cls){ return '<svg class="i'+(cls?' '+cls:'')+'"><use href="#'+i
 function img(url,alt,cls){ return '<img'+(cls?' class="'+cls+'"':'')+' src="'+h(url||'')+'" alt="'+
   h(alt||'')+'" loading="lazy" decoding="async">'; }
 function fname(n){ return nfl(n); }
-/* full pages (chat, guests, photos) spell the host out; everyone else keeps the initial */
+/* subpages (chat, guests, photos): the host sees every guest in full - they need to tell
+   attendees apart. Everyone else gets last initials, and the host's own name stays spelled out. */
 function evName(ev,name,uid){
+  if(ev && ev.role==='hosting') return String(name||'');
   var host = !!ev && ((uid && ev.hostUid && uid===ev.hostUid) || (!!name && name===ev.hostName));
   return host ? String(name||'') : nfl(name); }
 var _toastT=null;
@@ -2847,7 +2849,7 @@ function renderGuests(id){
   }
   function goingRow(g){
     return '<div class="g-row"><span class="g-av on">'+img(g.avatarUrl,'')+'</span>'+
-      '<div class="g-txt"><div class="g-name"><b>'+h(g.isHost?g.name:nfl(g.name))+'</b>'+
+      '<div class="g-txt"><div class="g-name"><b>'+h(g.isHost?g.name:evName(ev,g.name,g.uid))+'</b>'+
         (g.isHost?'<span class="tag">Host</span>':'')+
         (g.plus?'<span class="tag">+'+g.plus+'</span>':'')+'</div>'+
         (g.message?'<p>'+h(g.message)+'</p>':'')+'<small>'+h(g.invitedLabel)+'</small></div>'+
@@ -2856,15 +2858,15 @@ function renderGuests(id){
   function waitRow(g){
     var d8=rowDots(g);
     return '<div class="g-row"><span class="g-av">'+img(g.avatarUrl,'')+'</span>'+
-      '<div class="g-txt"><div class="g-name"><b>'+h(g.isHost?g.name:nfl(g.name))+'</b></div>'+
+      '<div class="g-txt"><div class="g-name"><b>'+h(g.isHost?g.name:evName(ev,g.name,g.uid))+'</b></div>'+
         '<small>'+h(g.invitedLabel)+'</small></div>'+
       (d8?'<span class="g-end">'+d8+'</span>':'')+'</div>';
   }
   function reqRow(r, i){
     return '<div class="g-row"><span class="g-av">'+img(r.avatarUrl||GAV,'')+'</span>'+
-      '<div class="g-txt"><div class="g-name"><b>'+h(nfl(r.name))+'</b></div>'+
-        '<small>'+(r.reqType==='invite' ? 'Suggested by '+h(r.byName?nfl(r.byName):'a guest')
-                 : r.reqType==='remove' ? 'Removal asked by '+h(r.byName?nfl(r.byName):'a guest')
+      '<div class="g-txt"><div class="g-name"><b>'+h(evName(ev,r.name,r.uid))+'</b></div>'+
+        '<small>'+(r.reqType==='invite' ? 'Suggested by '+h(r.byName?evName(ev,r.byName,r.byUid):'a guest')
+                 : r.reqType==='remove' ? 'Removal asked by '+h(r.byName?evName(ev,r.byName,r.byUid):'a guest')
                  : 'Wants to join')+
         (r.phone?' · '+h(r.phone):'')+'</small></div>'+
       '<span class="g-end">'+

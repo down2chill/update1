@@ -283,7 +283,7 @@ h2{font:700 clamp(21px,5.4vw,24px)/1.2 var(--disp);letter-spacing:-.02em;margin:
 .plusrow button svg.i{width:16px;height:16px;stroke-width:2.4}
 .plusrow b{font:700 16px/1 var(--disp);min-width:32px;text-align:center;color:var(--primary)}
 .note{text-align:center;color:var(--muted);font-size:14.5px;margin:8px 0 0}
-.about{margin:0;font-size:16.5px;line-height:1.62;color:var(--ink-soft)}
+.about{margin:0;font-size:16.5px;line-height:1.62;color:var(--ink-soft);white-space:pre-wrap;overflow-wrap:break-word}
 .chips{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:22px}
 .chip{display:flex;align-items:center;gap:11px;min-height:56px;padding:0 14px;background:var(--soft);
   border-radius:var(--r-sm);color:var(--primary-ink);font-size:clamp(13.8px,3.7vw,15.5px);font-weight:500}
@@ -2257,9 +2257,11 @@ function toast(msg,kind,ms){
   if(ms!==0) _toastT=setTimeout(function(){ el.hidden=true; }, ms||2600);
 }
 function absUrl(hash){ return location.origin + location.pathname + '#' + hash; }
+/* address alone - a "Venue, address" query can miss when the place name
+   doesn't match the map listing; venue only fills in when there's no address */
 function mapsUrl(ev){
   return 'https://www.google.com/maps/search/?api=1&query='+
-    encodeURIComponent((ev.venue?ev.venue+', ':'')+ev.address);
+    encodeURIComponent(ev.address || ev.venue || '');
 }
 function skel(msg){ return '<p class="skel">'+h(msg||'Loading\u2026')+'</p>'; }
 /* one wordmark, used by the home header and by every subpage's back row */
@@ -2377,7 +2379,7 @@ function eventCard(ev){
         '<div class="edate"><b>'+dp.day+'</b><span>'+dp.monUp+'</span></div>'+
       '</div>'+
       '<div class="ehost">'+img(ev.hostAvatarUrl,'')+
-        '<p><span class="hb">Hosted by </span><b>'+h(fname(ev.hostName))+'</b> \u00B7 '+ev.counts.going+' going</p>'+
+        '<p><span class="hb">Hosted by </span><b>'+h(fname(ev.hostName))+'</b> \u00B7 '+goingTotal(ev)+' going</p>'+
         statusPill(ev)+
       '</div>'+
     '</div></a>';
@@ -2541,7 +2543,7 @@ function calBody(){
   var dp=dparts(calState.sel), dayEvs=eventsOn(calState.sel,q);
   var rows = dayEvs.length ? dayEvs.map(function(ev){
     var stack=ev.guestPreview.slice(0,3).map(function(g){ return img(g.avatarUrl,''); }).join('');
-    var extra=Math.max(0, ev.counts.going-3);
+    var extra=Math.max(0, goingTotal(ev)-3);
     return '<a class="drow" href="#event/'+ev.id+'" data-nav>'+
       img(ev.thumbUrl||DEF_COVER,'')+
       '<div class="dinfo">'+
@@ -2627,7 +2629,8 @@ function renderEvent(id){
         return { name: g.name, avatarUrl: g.avatarUrl, isHost: g.isHost };
       })
     : ev.guestPreview.slice(0,5);
-  var extra=Math.max(0, Math.max(c.going, gb?gb.going.length:0)-gs.length);
+  var gplus=goingPlus(ev, gb);
+  var extra=Math.max(0, Math.max(c.going, gb?gb.going.length:0)+gplus-gs.length);
   var total=c.going+c.maybe+c.cant;
 
   var mayPost = canPost(ev);
@@ -2698,7 +2701,7 @@ function renderEvent(id){
       /* the host never RSVPs - they are going by definition, so no buttons */
       (ev.role==='hosting'
         ? '<section class="sec"><div class="sec-h"><h2>RSVPs</h2></div>'+
-          '<p class="tally"><b id="c-going">'+c.going+'</b> Going <i>\u00B7</i> <b id="c-maybe">'+c.maybe+
+          '<p class="tally"><b id="c-going">'+(c.going+gplus)+'</b> Going <i>\u00B7</i> <b id="c-maybe">'+c.maybe+
             '</b> Maybe <i>\u00B7</i> <b id="c-cant">'+c.cant+'</b> Can\u2019t Go</p>'+
           '<p class="note">You\u2019re hosting, so you\u2019re already counted in.</p>'+
           '<div id="plus-slot">'+plusRowInner(ev)+'</div>'+
@@ -2716,7 +2719,7 @@ function renderEvent(id){
             '<button type="button" data-k="maybe" aria-pressed="'+(myRsvp(ev.id)==='maybe')+'">'+ico('help')+'Maybe</button>'+
             '<button type="button" data-k="cant" aria-pressed="'+(myRsvp(ev.id)==='cant')+'">'+ico('x')+'Can\u2019t Go</button>'+
           '</div>'+
-          '<p class="tally"><b id="c-going">'+c.going+'</b> Going <i>\u00B7</i> <b id="c-maybe">'+c.maybe+
+          '<p class="tally"><b id="c-going">'+(c.going+gplus)+'</b> Going <i>\u00B7</i> <b id="c-maybe">'+c.maybe+
             '</b> Maybe <i>\u00B7</i> <b id="c-cant">'+c.cant+'</b> Can\u2019t Go</p>'+
           '<p class="note">You can update your RSVP anytime.</p>'+
           '<div id="plus-slot">'+plusRowInner(ev)+'</div>'+
@@ -2874,6 +2877,17 @@ function guestBuckets(ev){
   });
   return b;
 }
+/* extras (+1s) brought by people who are officially going - the same rows the
+   guests page tags "+N". Before the guest stream lands there's nothing to sum. */
+function goingPlus(ev, b){
+  if(!b){
+    if(ev.guests == null) return +((ev.counts || {}).plus) || 0;
+    b = guestBuckets(ev);
+  }
+  return b.going.reduce(function(s, g){ return s + (+g.plus || 0); }, 0);
+}
+/* headcount: everyone going plus everyone they bring */
+function goingTotal(ev, b){ return (((ev.counts || {}).going) || 0) + goingPlus(ev, b); }
 function renderGuests(id){
   var ev=findEvent(id); if(!ev) return renderHome();
   var b=ev.guests?guestBuckets(ev):null;
@@ -2967,7 +2981,7 @@ function renderGuests(id){
     '</header>'+
     '<h1 class="title">Guests</h1>'+
     '<div class="stats"><div class="stat-grid">'+
-      '<div class="stat"><b>'+c.going+'</b><span>Going</span></div>'+
+      '<div class="stat"><b>'+(c.going+goingPlus(ev,b))+'</b><span>Going</span></div>'+
       '<div class="stat"><b>'+c.maybe+'</b><span>Maybe</span></div>'+
       '<div class="stat"><b>'+c.cant+'</b><span>Can\u2019t Go</span></div>'+
       '<div class="stat"><b>'+c.pending+'</b><span>Invited</span></div>'+
@@ -3372,9 +3386,9 @@ function renderCreate2(){
         '<section><h2 class="fld">About</h2>' +
           '<p class="fsub">Tell guests what makes this event special.</p>' +
           '<div class="tawrap">' +
-            '<textarea class="inp" id="c-about" maxlength="500" data-d="about" aria-label="About this event" ' +
+            '<textarea class="inp" id="c-about" maxlength="2000" data-d="about" aria-label="About this event" ' +
               'placeholder="Bring your swimsuit, towel, and your favorite summer snack.">' + h(d.about) + '</textarea>' +
-            '<span class="count" id="c-count">' + d.about.length + ' / 500</span>' +
+            '<span class="count" id="c-count">' + d.about.length + ' / 2000</span>' +
           '</div></section>' +
         '<section><h2 class="fld">Vibe</h2>' +
           '<p class="fsub">Help guests know what to expect. Pick as many as fit.</p>' + vibeGrid(d) + '</section>' +
@@ -4290,9 +4304,9 @@ function renderEditPage(){
           '<div id="cover-wrap">' + coverBox(d) + '</div></section>' +
         '<section><h2 class="fld">About</h2>' +
           '<div class="tawrap">' +
-            '<textarea class="inp" id="c-about" maxlength="500" data-d="about" aria-label="About this event" ' +
+            '<textarea class="inp" id="c-about" maxlength="2000" data-d="about" aria-label="About this event" ' +
               'placeholder="Tell guests what makes this event special.">' + h(d.about) + '</textarea>' +
-            '<span class="count" id="c-count">' + d.about.length + ' / 500</span>' +
+            '<span class="count" id="c-count">' + d.about.length + ' / 2000</span>' +
           '</div></section>' +
         '<section><h2 class="fld">Vibe</h2>' +
           '<p class="fsub">Pick as many as fit.</p>' + vibeGrid(d) + '</section>' +
@@ -5211,6 +5225,8 @@ function eventDock(id){
         pn>0?'is bringing +'+pn:'isn’t bringing anyone now');
       var ps=document.getElementById('plus-slot');
       if(ps && pev) ps.innerHTML=plusRowInner(pev);
+      var cg=document.getElementById('c-going');
+      if(cg && pev) cg.textContent=((pev.counts||{}).going||0)+goingPlus(pev);
       return;
     }
     var clm=t.closest('[data-claim]');
@@ -5636,7 +5652,7 @@ function eventDock(id){
       loadDraft()[dk]=e.target.value; saveDraft();
       if(dk==='about'){
         var cc=document.getElementById('c-count');
-        if(cc) cc.textContent=e.target.value.length+' / 500';
+        if(cc) cc.textContent=e.target.value.length+' / 2000';
       } else if(dk==='venue'||dk==='address'){
         var mb=document.querySelector('.mapb');
         if(mb) mb.hidden=!draftMapQuery(loadDraft());
@@ -6516,7 +6532,8 @@ function eventDock(id){
     Array.prototype.forEach.call(box.children,function(b){
       b.setAttribute('aria-pressed', String(b===btn)); });
     ['going','maybe','cant'].forEach(function(x){
-      var el=document.getElementById('c-'+x); if(el) el.textContent=n[x]; });
+      var el=document.getElementById('c-'+x);
+      if(el) el.textContent=n[x]+(x==='going'&&ev?goingPlus(ev):0); });
 
     /* remember the answer on this uid and keep the event on my list -
        a "can't go" still stays visible in case you change your mind */

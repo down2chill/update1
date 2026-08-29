@@ -1396,16 +1396,30 @@ function letterAvatar(name, uid){
    sky, stars, bunting, moon, hills and tent are all seeded off the EVENT ID:
    coverless events each get their own stable artwork, identical on every
    device and for every viewer, with nothing stored (coverUrl stays "") */
-var COV_PAL = [
-  { sky:['#7d8ffb','#a9b6fc','#d7ddfd','#eef0fc'], hills:['#b6c0fc','#93a2fa','#7683f2'] },  /* dusk indigo */
-  { sky:['#f6a06b','#f9c096','#fde3cb','#fdf4ea'], hills:['#f8b48c','#f2937e','#e8756f'] },  /* sunset peach */
-  { sky:['#63cfae','#8fdfc7','#c9f0e1','#effaf5'], hills:['#a3e5cf','#72d1b4','#4fbb96'] },  /* mint dusk */
-  { sky:['#b28af5','#cbadf8','#e7dbfc','#f6f1fd'], hills:['#d2b7f9','#b794f6','#9a71ef'] },  /* lavender */
-  { sky:['#5b66e9','#7d8ffb','#b3bdfc','#dfe3fd'], hills:['#8a95f7','#6f7cf3','#5561ee'] },  /* deep night */
-  { sky:['#f584b1','#f8a9c7','#fbd7e5','#fdf0f6'], hills:['#f9b0cc','#f28ab2','#e5699b'] }   /* rose */
-];
 var COV_ACC  = ['#ffd479','#fca5b8','#8ce3b0','#bfdbfe','#f7b733'];
 var COV_TENT = ['#4038f0','#6d28d9','#0f766e','#c2417e'];
+/* real-scene palettes: skies keep sky colors (day blue, dusks, sunsets, dawn
+   pink, night navy - never green), grounds keep ground colors (meadow, teal,
+   dusk grass, heather, sand, rose, golden field), and each sky's g[] lists
+   only the grounds it plausibly meets */
+var COV_SKY = [
+  { h:214, s:86, l:70, g:[0,1,6] },          /* day blue */
+  { h:231, s:90, l:72, g:[2,0,3] },          /* dusk indigo (the original) */
+  { h:262, s:82, l:72, g:[3,2,5] },          /* violet evening */
+  { h:288, s:72, l:74, g:[5,3,1] },          /* orchid */
+  { h:334, s:84, l:76, g:[0,5,1] },          /* dawn pink */
+  { h:22,  s:88, l:72, g:[4,6,2] },          /* sunset peach */
+  { h:238, s:74, l:60, g:[2,1,3], deep:1 }   /* night navy */
+];
+var COV_GND = [
+  { h:140, s:62, l:78 },   /* 0 meadow green */
+  { h:168, s:58, l:76 },   /* 1 sea-glass teal */
+  { h:232, s:80, l:82 },   /* 2 dusk indigo grass */
+  { h:266, s:66, l:82 },   /* 3 heather violet */
+  { h:16,  s:78, l:80 },   /* 4 warm coral sand */
+  { h:338, s:70, l:83 },   /* 5 rose field */
+  { h:44,  s:74, l:80 }    /* 6 golden field */
+];
 var COV_MEMO = {};
 function defCover(id){
   var key = String(id || '');
@@ -1415,7 +1429,26 @@ function defCover(id){
   for(i = 0; i < key.length; i++){ h ^= key.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
   function R(){ h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; }
   function riv(a, b){ return Math.round(a + R() * (b - a)); }
-  var P = COV_PAL[Math.floor(R() * COV_PAL.length)];
+  /* a seeded sky family meets one of ITS plausible grounds; jitter keeps two
+     events on the same pairing from being twins, and a rare deeper-dusk draw
+     splits near-matches apart at a distance */
+  function C(hh, ss, ll){
+    return 'hsl('+((Math.round(hh) % 360 + 360) % 360)+','+
+      Math.max(0, Math.min(100, Math.round(ss)))+'%,'+
+      Math.max(0, Math.min(100, Math.round(ll)))+'%)';
+  }
+  var S = COV_SKY[Math.floor(R() * COV_SKY.length)];
+  var G = COV_GND[S.g[Math.floor(R() * S.g.length)]];
+  var jh = S.h + riv(-5, 5), gh = G.h + riv(-5, 5), gs = G.s + riv(-4, 4);
+  var deep = !!S.deep || R() < .12;
+  var topL = deep ? S.l - 13 : S.l + riv(-3, 3), topS = S.s + riv(-4, 4);
+  var drift = riv(-10, 10);
+  var bl = G.l + riv(-2, 2) - (deep ? 5 : 0);
+  var P = {
+    sky: [ C(jh, topS, topL), C(jh + drift * .4, topS - 8, topL + 8),
+           C(jh + drift, topS - 22, riv(86, 90)), C(jh + drift, 48, 96) ],
+    hills: [ C(gh, gs, bl), C(gh + riv(-6, 6), gs, bl - 7), C(gh + riv(-6, 6), gs, bl - 15) ]
+  };
   var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 600">'+
     '<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">'+
     '<stop offset="0" stop-color="'+P.sky[0]+'"/><stop offset=".45" stop-color="'+P.sky[1]+'"/>'+

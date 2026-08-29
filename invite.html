@@ -957,6 +957,11 @@ textarea.inp{height:auto;min-height:158px;padding:16px 18px 40px;line-height:1.6
   box-shadow:0 0 0 1.5px var(--primary),0 2px 10px rgba(30,30,100,.08)}
 .mg-lab{margin:16px 2px 8px;font:700 12px/1 var(--disp);letter-spacing:.08em;
   text-transform:uppercase;color:var(--muted);text-align:left}
+.lk-head{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+.lk-head .mg-lab{margin:0 2px}
+.lk-all{border:0;background:none;padding:4px 2px;color:var(--primary);
+  font:700 13.5px/1 var(--disp);cursor:pointer}
+.lk-all:hover{opacity:.8}
 .mg-avs{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin:2px 0 8px}
 .mg-av{position:relative;flex:0 0 76px;width:76px;height:76px;aspect-ratio:1;border-radius:50%;padding:0;
   border:3px solid var(--line-2);transition:border-color .15s,transform .15s}
@@ -1719,6 +1724,7 @@ function loadMe(){
   if(!ME.claimRow || typeof ME.claimRow !== 'object') ME.claimRow = {};
   if(!ME.rsvp || typeof ME.rsvp !== 'object') ME.rsvp = {};
   if(typeof ME.verifiedPhone !== 'string') ME.verifiedPhone = '';
+  if(typeof ME.verifiedAt !== 'number') ME.verifiedAt = 0;
   if(typeof ME.verifyDeclined !== 'string') ME.verifyDeclined = '';
   if(typeof ME.verifyPending !== 'string') ME.verifyPending = '';
   if(typeof ME.verifyPendingAt !== 'number') ME.verifyPendingAt = 0;
@@ -1785,14 +1791,25 @@ function authState(){
   var m = loadMe();
   return phoneVerified() ? 'verified' : (m.name ? 'named' : 'guest');
 }
+/* a match only counts while OUR 2FA outranks theirs: whoever passed the code
+   most recently owns the number now, and unless they accepted us as one of
+   their own devices, their account is sealed to us until we re-verify - a
+   recycled number's old owner must never ride into its new owner's account */
+function linkFresh(p){
+  var m = loadMe();
+  return !(p.verified && (p.verifiedAt || 0) > (m.verifiedAt || 0) &&
+           (p.linkOks || []).indexOf(m.uid) < 0);
+}
 function linkedProfiles(){
   var ok = loadMe().linkOks;
-  return phoneVerified() ? phoneMatches().filter(function(p){ return ok.indexOf(p.uid) > -1; }) : [];
+  return phoneVerified() ? phoneMatches().filter(function(p){
+    return ok.indexOf(p.uid) > -1 && linkFresh(p); }) : [];
 }
 /* verified matches still waiting on the link chooser's yes/no */
 function linkPend(){
   var ok = loadMe().linkOks;
-  return phoneVerified() ? phoneMatches().filter(function(p){ return ok.indexOf(p.uid) < 0; }) : [];
+  return phoneVerified() ? phoneMatches().filter(function(p){
+    return ok.indexOf(p.uid) < 0 && linkFresh(p); }) : [];
 }
 /* real texts whenever Firebase got its keys - SMS does not need the events
    stream, and gating on STORE.mode left the sheet mute if the snapshot was
@@ -1855,10 +1872,14 @@ function myEvents(){
 }
 /* me plus every uid linked to me by phone number */
 function myUids(){
-  var m = loadMe(), out = [m.uid];
-  (m.linked || []).forEach(function(u){ if(out.indexOf(u) < 0) out.push(u); });
+  var m = loadMe(), out = [m.uid], doc = {};
+  (m.cloudLinked || []).forEach(function(p){ doc[p.uid] = p; });
+  /* m.linked persists between saves - a stale entry must not outlive the
+     freshness check when we DO hold the uid's cloud doc */
+  (m.linked || []).forEach(function(u){
+    if(out.indexOf(u) < 0 && (!doc[u] || linkFresh(doc[u]))) out.push(u); });
   (m.cloudLinked || []).forEach(function(p){
-    if(m.linkOks.indexOf(p.uid) > -1 && out.indexOf(p.uid) < 0) out.push(p.uid); });
+    if(m.linkOks.indexOf(p.uid) > -1 && linkFresh(p) && out.indexOf(p.uid) < 0) out.push(p.uid); });
   return out;
 }
 /* my answer for an event - mine first, then anything a linked uid said */
@@ -1889,17 +1910,27 @@ function saveMe(){
   }catch(e){}
   if(STORE.mode === 'live' && window.D2C && D2C.saveProfile){
     D2C.saveProfile({ uid: m.uid, name: m.name, phone: normPhone(m.phone),
-                      verified: phoneVerified(),
+                      verified: phoneVerified(), verifiedAt: m.verifiedAt || 0,
+                      linkOks: m.linkOks,
                       photo: m.photo || '', at: m.at, events: m.events, claims: m.claims,
                       claimRow: m.claimRow, rsvp: m.rsvp, plus: m.plus })
       /* rules only answer the phone query for the number's VERIFIED owner */
       .then(function(){ return (normPhone(m.phone) && phoneVerified()) ? D2C.findByPhone(normPhone(m.phone)) : []; })
       .then(function(list){
+        /* someone else passed 2FA on this number AFTER us and did not accept
+           us as their own device: the number changed hands. Our verification
+           is void until we pass a fresh code - which the number's old owner
+           can no longer do. */
+        if(phoneVerified() && (list || []).some(function(p){
+             return p.uid !== m.uid && !linkFresh(p); })){
+          m.verifiedPhone = ''; m.verifiedAt = 0;
+          toast('This number was re-verified on another account - verify again to keep your links','err',6000);
+        }
         m.cloudLinked = (list || []).filter(function(p){
           return p.uid !== m.uid && m.linkRejects.indexOf(p.uid) < 0; });
         if(phoneVerified()){
           m.cloudLinked.forEach(function(p){
-            if(m.linkOks.indexOf(p.uid) < 0) return;   /* undecided - the chooser decides */
+            if(m.linkOks.indexOf(p.uid) < 0 || !linkFresh(p)) return;   /* undecided or outranked */
             (p.events || []).forEach(function(id){ if(m.events.indexOf(id) < 0) m.events.push(id); });
             var k;
             for(k in (p.rsvp || {}))   if(!m.rsvp[k])   m.rsvp[k]   = p.rsvp[k];
@@ -4686,7 +4717,10 @@ function linkCard(){
         : LINKQ.profs.length + ' other accounts') + ' - maybe your other devices, maybe ' +
       'whoever had the number before you. Link only what’s yours; switched-off ' +
       'accounts stay separate.</p>' +
-    '<div class="glist mt">' + LINKQ.profs.map(function(p){
+    '<div class="lk-head"><p class="mg-lab">Accounts</p>' +
+      '<button class="lk-all" type="button" data-linkall>' +
+      (n === LINKQ.profs.length ? 'Turn all off' : 'Turn all on') + '</button></div>' +
+    '<div class="glist">' + LINKQ.profs.map(function(p){
       var k = (p.events || []).length, on = !!LINKQ.on[p.uid];
       return '<div class="grow"><span class="gav"><img src="' + h(p.photo || GAV) + '" alt=""></span>' +
         '<span class="gtx"><b>' + h(p.name || 'Unnamed visitor') + '</b>' +
@@ -5276,7 +5310,12 @@ function eventDock(id){
     var ltg=t.closest('[data-linktgl]');
     if(ltg){
       LINKQ.on[ltg.dataset.linktgl]=!LINKQ.on[ltg.dataset.linktgl];
-      modal.innerHTML=linkCard(); return;
+      linkSync(); return;
+    }
+    if(t.closest('[data-linkall]')){
+      var allOn=LINKQ.profs.every(function(p){ return LINKQ.on[p.uid]; });
+      LINKQ.profs.forEach(function(p){ LINKQ.on[p.uid]=!allOn; });
+      linkSync(); return;
     }
     if(t.closest('[data-linklater]')){ LINK_LATER=true; closeModal(); repaintMe(); return; }
     if(t.closest('[data-linkgo]')){
@@ -5745,6 +5784,21 @@ function eventDock(id){
     var iv=document.getElementById('cv-in');
     if(iv){ iv.focus(); iv.select(); }
   }
+  /* patch the open chooser in place - re-rendering the card resets the
+     sheet's scroll, which yanked long lists back to the top on every flip */
+  function linkSync(){
+    var on=0;
+    modal.querySelectorAll('[data-linktgl]').forEach(function(b){
+      var v=!!LINKQ.on[b.dataset.linktgl];
+      if(v) on++;
+      b.classList.toggle('on',v); b.setAttribute('aria-checked',v);
+    });
+    var go=modal.querySelector('[data-linkgo]');
+    if(go) go.textContent = on ? 'Link '+(on===1?'this account':on+' accounts')
+                               : 'Keep them separate';
+    var all=modal.querySelector('[data-linkall]');
+    if(all) all.textContent = on===LINKQ.profs.length ? 'Turn all off' : 'Turn all on';
+  }
   /* "Decide later" quiets the auto-reprompt for this pageload only - an
      undecided match asks again next session (or via the profile row) */
   var LINK_LATER=false;
@@ -5776,6 +5830,7 @@ function eventDock(id){
   function smsVerified(tel){
     var m=loadMe();
     m.verifiedPhone = tel ? normPhone(tel) : normPhone(m.phone);
+    m.verifiedAt = Date.now();
     m.verifyDeclined = '';
     m.verifyPending = ''; m.verifyPendingAt = 0;
     LINK_LATER=false;   /* a fresh verification always gets the chooser */
@@ -5817,7 +5872,7 @@ function eventDock(id){
     saveMe(); propagateMe();
     if(STORE.mode==='live' && window.D2C && D2C.renameLinked){
       var mm=loadMe(), okc=(mm.cloudLinked||[]).filter(function(p){
-        return mm.linkOks.indexOf(p.uid)>-1; });
+        return mm.linkOks.indexOf(p.uid)>-1 && linkFresh(p); });
       D2C.renameLinked(okc, mm.name, mm.photo||'').catch(function(){});
     }
     remapRoles(); STORE.notify();

@@ -1731,6 +1731,18 @@ function loadMe(){
   if(!ME.plus || typeof ME.plus !== 'object') ME.plus = {};
   return ME;
 }
+/* another tab or a bfcache-restored page may hold a STALE in-memory profile;
+   before it acts (or saves), adopt the stored copy when that one is newer -
+   a stale context must never clobber a change made elsewhere */
+function refreshMe(){
+  try{
+    var s = JSON.parse(localStorage.getItem(ME_KEY) || 'null');
+    if(s && s.uid && ME && s.uid === ME.uid && (s.at || 0) > (ME.at || 0)){
+      ME = null; loadMe();
+      remapRoles(); STORE.notify(); repaintMe();
+    }
+  }catch(e){}
+}
 function meAvatar(){ var m = loadMe(); return m.photo || GAV; }
 function normPhone(p){ return String(p || '').replace(/\D/g, '').slice(-10); }
 /* Firebase wants E.164 ("+15550123456") - a bare 10-digit number is assumed US */
@@ -1752,7 +1764,10 @@ function phoneMatches(){
   for(k in reg) if(k !== m.uid && normPhone(reg[k].phone) === mine &&
                    m.linkRejects.indexOf(k) < 0) out.push(reg[k]);
   (m.cloudLinked || []).forEach(function(p){
-    if(p.uid !== m.uid && m.linkRejects.indexOf(p.uid) < 0 &&
+    /* an entry only matches the number it actually carries - after a number
+       change, the old number's linked accounts are no longer "matches" */
+    if(p.uid !== m.uid && normPhone(p.phone) === mine &&
+       m.linkRejects.indexOf(p.uid) < 0 &&
        !out.some(function(o){ return o.uid === p.uid; })) out.push(p);
   });
   return out;
@@ -1898,6 +1913,7 @@ function myRsvp(id){
   return '';
 }
 function saveMe(){
+  refreshMe();   /* never save over a newer copy from another context */
   var m = loadMe(), reg = regAll();
   m.at = Date.now();
   reg[m.uid] = { uid: m.uid, name: m.name, phone: m.phone, photo: m.photo, at: m.at,
@@ -1941,6 +1957,11 @@ function saveMe(){
           remapRoles(); STORE.notify();
         }
         m.linked = linkedProfiles().map(function(p){ return p.uid; });
+        /* the round-trip took time - if another context saved something newer
+           meanwhile, this copy is stale: persist nothing, prompt nothing */
+        var cur = null;
+        try{ cur = JSON.parse(localStorage.getItem(ME_KEY) || 'null'); }catch(e){}
+        if(cur && cur.uid === m.uid && (cur.at || 0) > (m.at || 0)){ refreshMe(); return; }
         try{ localStorage.setItem(ME_KEY, JSON.stringify(m)); }catch(e){}
         if(m.cloudLinked.length && !phoneVerified() && !verifyDeclined() && !verifyPending()) promptVerify();
         else if(linkPend().length) promptLinkChoice();
@@ -6960,6 +6981,7 @@ function eventDock(id){
      union when the app boots and whenever this tab comes back into view */
   var lastSync=0;
   function syncLinks(){
+    refreshMe();   /* a stale copy must adopt newer state, not re-save itself */
     if(STORE.mode!=='live' || !phoneVerified()) return;
     var now=Date.now();
     if(now-lastSync<60000) return;
@@ -6969,6 +6991,8 @@ function eventDock(id){
   document.addEventListener('visibilitychange',function(){
     if(!document.hidden) syncLinks();
   });
+  /* bfcache restores the page with its old in-memory profile - catch up */
+  window.addEventListener('pageshow',function(e){ if(e.persisted) refreshMe(); });
 
   if(location.hash==='#vpdebug'){
     (function(){

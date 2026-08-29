@@ -2151,7 +2151,7 @@ function appendLocalMessage(id, text, imageUrl){
 function appendLocalActivity(id, icon, text, isCheck, ms){
   var ev = STORE.byId[id]; if(!ev || !ev.activity) return;
   var m = loadMe();
-  ev.activity.unshift({ personName: m.name || 'Guest', personAvatarUrl: meAvatar(),
+  ev.activity.unshift({ personUid: m.uid, personName: m.name || 'Guest', personAvatarUrl: meAvatar(),
     icon: icon, isCheck: !!isCheck, text: text, whenLabel: '', ms: ms || 0,
     at: new Date().toISOString(), quote: /^[“"]/.test(text) });
   STORE.notify();
@@ -2275,6 +2275,26 @@ function evName(ev,name,uid){
   if(ev && ev.role==='hosting') return String(name||'');
   var host = !!ev && ((uid && ev.hostUid && uid===ev.hostUid) || (!!name && name===ev.hostName));
   return host ? String(name||'') : nfl(name); }
+/* freshest name+face for a uid - profile edits beat the snapshot a row was
+   written with: me (instant), the event doc's host stamp, any streamed row,
+   then whatever the record itself says */
+function evProf(ev,uid,name,av){
+  var o={ name:String(name||''), av:av||'' }, ls, l, i, j;
+  if(!uid) return o;
+  if(myUids().indexOf(uid)>-1){
+    var m=loadMe();
+    return { name:m.name||o.name, av:meAvatar()||o.av };
+  }
+  if(!ev) return o;
+  if(ev.hostUid && uid===ev.hostUid)
+    return { name:ev.hostName||o.name, av:ev.hostAvatarUrl||o.av };
+  ls=[ev.guests,ev.maybes,ev.cants,ev.waiting,ev.requests,ev.guestPreview];
+  for(i=0;i<ls.length;i++){ l=ls[i]||[];
+    for(j=0;j<l.length;j++) if(l[j].uid===uid)
+      return { name:l[j].name||o.name, av:l[j].avatarUrl||o.av };
+  }
+  return o;
+}
 var _toastT=null;
 function toast(msg,kind,ms){
   var el=document.getElementById('toast'); if(!el) return;
@@ -2406,8 +2426,9 @@ function eventCard(ev){
         '</div>'+
         '<div class="edate"><b>'+dp.day+'</b><span>'+dp.monUp+'</span></div>'+
       '</div>'+
-      '<div class="ehost">'+img(ev.hostAvatarUrl,'')+
-        '<p><span class="hb">Hosted by </span><b>'+h(fname(ev.hostName))+'</b> \u00B7 '+goingTotal(ev)+' going</p>'+
+      '<div class="ehost">'+(function(){ var hp=evProf(ev,ev.hostUid,ev.hostName,ev.hostAvatarUrl);
+        return img(hp.av,'')+
+        '<p><span class="hb">Hosted by </span><b>'+h(fname(hp.name))+'</b> \u00B7 '+goingTotal(ev)+' going</p>'; })()+
         statusPill(ev)+
       '</div>'+
     '</div></a>';
@@ -2570,7 +2591,8 @@ function calBody(){
 
   var dp=dparts(calState.sel), dayEvs=eventsOn(calState.sel,q);
   var rows = dayEvs.length ? dayEvs.map(function(ev){
-    var stack=ev.guestPreview.slice(0,3).map(function(g){ return img(g.avatarUrl,''); }).join('');
+    var stack=ev.guestPreview.slice(0,3).map(function(g){
+      return img(evProf(ev,g.uid,g.name,g.avatarUrl).av,''); }).join('');
     var extra=Math.max(0, goingTotal(ev)-3);
     return '<a class="drow" href="#event/'+ev.id+'" data-nav>'+
       img(ev.thumbUrl||DEF_COVER,'')+
@@ -2652,11 +2674,10 @@ function renderEvent(id){
      never land in it. Once the live guest stream is in, show the real going
      list (up to 5 faces, then +N); the snapshot only covers the first paint. */
   var gb=ev.guests ? guestBuckets(ev) : null;
-  var gs=gb && gb.going.length
-    ? gb.going.slice(0,5).map(function(g){
-        return { name: g.name, avatarUrl: g.avatarUrl, isHost: g.isHost };
-      })
-    : ev.guestPreview.slice(0,5);
+  var gs=(gb && gb.going.length ? gb.going.slice(0,5) : ev.guestPreview.slice(0,5))
+    .map(function(g){ var p=evProf(ev,g.uid,g.name,g.avatarUrl);
+      return { name: p.name, avatarUrl: p.av, isHost: g.isHost };
+    });
   var gplus=goingPlus(ev, gb);
   var extra=Math.max(0, Math.max(c.going, gb?gb.going.length:0)+gplus-gs.length);
   var total=c.going+gplus+c.maybe+c.cant;
@@ -2675,10 +2696,11 @@ function renderEvent(id){
     : skel('Loading photos\u2026');
 
   var last = (ev.messages||[])[ (ev.messages||[]).length-1 ], unseen = unseenCount(ev);
+  var lastP = last && evProf(ev,last.fromUid,last.fromName,last.fromAvatarUrl);
   var chatBlock = last
-    ? '<div class="chat-card"><div class="av-wrap">'+img(last.fromAvatarUrl,'')+
+    ? '<div class="chat-card"><div class="av-wrap">'+img(lastP.av,'')+
         (unseen?'<span class="badge">'+unseen+'</span>':'')+'</div>'+
-        '<div class="chat-txt"><b>'+h(fname(last.fromName))+'</b><p>'+
+        '<div class="chat-txt"><b>'+h(fname(lastP.name))+'</b><p>'+
         h(last.text || (last.imageUrl?'📷 Photo':''))+
         '</p><small>'+h(ago(last.at))+'</small></div>'+
         '<a class="ghost" href="#chat/'+ev.id+'" data-nav>'+ico('chat')+'Open Chat</a></div>'
@@ -2689,9 +2711,10 @@ function renderEvent(id){
   var feedBlock = acts
     ? (acts.length
         ? '<ul class="feed">'+(actsOpen?acts:acts.slice(0,5)).map(function(a){
-            return '<li>'+img(a.personAvatarUrl,'')+ico(a.icon,a.isCheck?'ok':'')+
+            var ap=evProf(ev,a.personUid,a.personName,a.personAvatarUrl);
+            return '<li>'+img(ap.av,'')+ico(a.icon,a.isCheck?'ok':'')+
               (function(){ var atx=actText(ev,a);
-                return '<p><b>'+h(fname(a.personName))+(a.quote&&atx===a.text?':':'')+'</b> '+h(atx); })()+
+                return '<p><b>'+h(fname(ap.name))+(a.quote&&atx===a.text?':':'')+'</b> '+h(atx); })()+
               '</p><time>'+h(a.at?ago(a.at):a.whenLabel)+'</time></li>'; }).join('')+'</ul>'+
           (acts.length>5
             ? '<button class="view-all" type="button" data-actmore="'+ev.id+'">'+
@@ -2715,8 +2738,9 @@ function renderEvent(id){
     '<div class="grid"><div class="colA">'+
       img(ev.coverUrl||DEF_COVER, ev.title, 'hero')+
       '<div class="meta">'+
-        '<div class="host">'+img(ev.hostAvatarUrl,'')+
-          '<p>Hosted by <b>'+h(fname(ev.hostName))+'</b></p>'+
+        '<div class="host">'+(function(){ var hp=evProf(ev,ev.hostUid,ev.hostName,ev.hostAvatarUrl);
+          return img(hp.av,'')+
+          '<p>Hosted by <b>'+h(fname(hp.name))+'</b></p>'; })()+
           (ev.role==='hosting'?'<span class="pill-tag">Hosting</span>'
                               :'<span class="pill-tag inv">Invited</span>')+
         '</div>'+
@@ -2804,11 +2828,13 @@ function renderEvent(id){
         '<div class="drow2">'+ico('money')+'<span>Entry</span><b>'+h(ev.entry)+'</b></div>'+
         '<div class="drow2">'+ico(joinOpt(joinMode(ev)).ic)+'<span>Who can join</span><b>'+
           h(joinOpt(joinMode(ev)).lab)+'</b></div>'+
-        '<div class="drow2">'+img(ev.hostAvatarUrl,'')+'<span>Hosted by</span><b>'+
-          h(fname(ev.hostName))+'</b></div>'+
+        '<div class="drow2">'+(function(){ var hp=evProf(ev,ev.hostUid,ev.hostName,ev.hostAvatarUrl);
+          return img(hp.av,'')+'<span>Hosted by</span><b>'+
+          h(fname(hp.name))+'</b>'; })()+'</div>'+
       '</div></section>'+
       '<section class="sec"><div class="sec-h"><h2>Recent activity</h2></div>'+feedBlock+'</section>'+
-      appCard(ev.role==='hosting'?'host':(ev.dateISO<TODAY?'list':'invite'), ev.hostName)+
+      appCard(ev.role==='hosting'?'host':(ev.dateISO<TODAY?'list':'invite'),
+              evProf(ev,ev.hostUid,ev.hostName,ev.hostAvatarUrl).name)+
     '</div></div></div>';
 }
 
@@ -2965,23 +2991,25 @@ function renderGuests(id){
       ico('more')+'</button>';
   }
   function goingRow(g){
-    return '<div class="g-row"><span class="g-av on">'+img(g.avatarUrl,'')+'</span>'+
-      '<div class="g-txt"><div class="g-name"><b>'+h(g.isHost?g.name:evName(ev,g.name,g.uid))+'</b>'+
+    var p=evProf(ev,g.uid,g.name,g.avatarUrl);
+    return '<div class="g-row"><span class="g-av on">'+img(p.av,'')+'</span>'+
+      '<div class="g-txt"><div class="g-name"><b>'+h(g.isHost?p.name:evName(ev,p.name,g.uid))+'</b>'+
         (g.isHost?'<span class="tag">Host</span>':'')+
         (g.plus?'<span class="tag">+'+g.plus+'</span>':'')+'</div>'+
         (g.message?'<p>'+h(g.message)+'</p>':'')+'<small>'+h(g.invitedLabel)+'</small></div>'+
       '<span class="g-end">'+(g.isYou?'<em>You</em>':'')+(rowDots(g)||ico('chev'))+'</span></div>';
   }
   function waitRow(g){
-    var d8=rowDots(g);
-    return '<div class="g-row"><span class="g-av">'+img(g.avatarUrl,'')+'</span>'+
-      '<div class="g-txt"><div class="g-name"><b>'+h(g.isHost?g.name:evName(ev,g.name,g.uid))+'</b></div>'+
+    var d8=rowDots(g), p=evProf(ev,g.uid,g.name,g.avatarUrl);
+    return '<div class="g-row"><span class="g-av">'+img(p.av,'')+'</span>'+
+      '<div class="g-txt"><div class="g-name"><b>'+h(g.isHost?p.name:evName(ev,p.name,g.uid))+'</b></div>'+
         '<small>'+h(g.invitedLabel)+'</small></div>'+
       (d8?'<span class="g-end">'+d8+'</span>':'')+'</div>';
   }
   function reqRow(r, i){
-    return '<div class="g-row"><span class="g-av">'+img(r.avatarUrl||GAV,'')+'</span>'+
-      '<div class="g-txt"><div class="g-name"><b>'+h(evName(ev,r.name,r.uid))+'</b></div>'+
+    var p=evProf(ev,r.uid,r.name,r.avatarUrl);
+    return '<div class="g-row"><span class="g-av">'+img(p.av||GAV,'')+'</span>'+
+      '<div class="g-txt"><div class="g-name"><b>'+h(evName(ev,p.name,r.uid))+'</b></div>'+
         '<small>'+(r.reqType==='invite' ? 'Suggested by '+h(r.byName?evName(ev,r.byName,r.byUid):'a guest')
                  : r.reqType==='remove' ? 'Removal asked by '+h(r.byName?evName(ev,r.byName,r.byUid):'a guest')
                  : 'Wants to join')+
@@ -3061,9 +3089,10 @@ function renderPhotos(id){
   var grid = ev.photos
     ? (ev.photos.length
         ? '<div class="pgrid" id="pgrid">'+ev.photos.map(function(p,i){
+            var bp=evProf(ev,p.byUid,p.byName,p.byAvatarUrl);
             return '<button type="button" data-ph="'+i+'" aria-label="Open photo '+(i+1)+
-              ' of '+ev.photos.length+'">'+img(p.thumbUrl,'Photo '+(i+1)+' by '+evName(ev,p.byName,p.byUid))+
-              '<span class="who">'+img(p.byAvatarUrl,'')+h(evName(ev,p.byName,p.byUid))+'</span></button>';
+              ' of '+ev.photos.length+'">'+img(p.thumbUrl,'Photo '+(i+1)+' by '+evName(ev,bp.name,p.byUid))+
+              '<span class="who">'+img(bp.av,'')+h(evName(ev,bp.name,p.byUid))+'</span></button>';
           }).join('')+'</div>'
         : '<p class="empty">No photos yet.</p>')
     : skel('Loading photos\u2026');
@@ -3092,6 +3121,7 @@ function renderPhotos(id){
 
 function lightbox(ev,i){
   var list=ev.photos||[], ph=list[i]; if(!ph) return '';
+  var bp=evProf(ev,ph.byUid,ph.byName,ph.byAvatarUrl);
   /* the host moderates everything; the photo's own uploader can pull theirs */
   var mayDel = ev.role==='hosting' || (ph.byUid && myUids().indexOf(ph.byUid)>-1);
   return '<div class="lb-bar"><span class="cnt">'+(i+1)+' of '+list.length+'</span>'+
@@ -3101,11 +3131,11 @@ function lightbox(ev,i){
     '<div class="lb-stage">'+
       '<button class="lb-arrow prev" type="button" data-lb-step="-1" aria-label="Previous photo">'+
         ico('chevl')+'</button>'+
-      '<img src="'+h(ph.url)+'" alt="Photo '+(i+1)+' by '+h(evName(ev,ph.byName,ph.byUid))+'">'+
+      '<img src="'+h(ph.url)+'" alt="Photo '+(i+1)+' by '+h(evName(ev,bp.name,ph.byUid))+'">'+
       '<button class="lb-arrow next" type="button" data-lb-step="1" aria-label="Next photo">'+
         ico('chev')+'</button>'+
     '</div>'+
-    '<div class="lb-cap">'+img(ph.byAvatarUrl,'')+'<b>'+h(evName(ev,ph.byName,ph.byUid))+'</b><span>'+
+    '<div class="lb-cap">'+img(bp.av,'')+'<b>'+h(evName(ev,bp.name,ph.byUid))+'</b><span>'+
       h(ph.whenLabel)+'</span></div>';
 }
 
@@ -3118,14 +3148,15 @@ function renderChat(id){
     ? '<div class="thread">'+msgs.map(function(m,mi){
         /* every bubble opens its options on tap - copy for anyone, edit for
            the poster, delete for the poster or the host */
+        var fp=evProf(ev,m.fromUid,m.fromName,m.fromAvatarUrl);
         return '<div class="msg'+(m.isYou?' me':'')+'">'+
-          (m.isYou?'':img(m.fromAvatarUrl,''))+
+          (m.isYou?'':img(fp.av,''))+
           '<div class="bub" data-msg="'+mi+'" role="button" tabindex="0" '+
             'aria-label="Message options">'+
-            '<span class="who2">'+(m.isYou?'You':h(evName(ev,m.fromName,m.fromUid)))+'</span>'+
+            '<span class="who2">'+(m.isYou?'You':h(evName(ev,fp.name,m.fromUid)))+'</span>'+
             (m.imageUrl?'<img class="chat-img" src="'+h(m.imageUrl)+'" data-imgview="'+h(m.imageUrl)+
-              '" data-imgby="'+h(evName(ev,m.fromName,m.fromUid))+'" alt="Photo from '+
-              h(evName(ev,m.fromName,m.fromUid))+'">':'')+
+              '" data-imgby="'+h(evName(ev,fp.name,m.fromUid))+'" alt="Photo from '+
+              h(evName(ev,fp.name,m.fromUid))+'">':'')+
             (m.text?'<p>'+h(m.text)+'</p>':'')+
             '<time>'+h(ago(m.at))+(m.edited?' · edited':'')+'</time>'+
           '</div>'+
@@ -4487,7 +4518,7 @@ function createLocalEvent(d){
   var id = 'draft-' + Date.now().toString(36),
       me = { name: loadMe().name || 'Guest', av: meAvatar() },
       ev = docToModel(id, draftDoc(d, id, loadMe().uid));
-  ev.guests = [{ name: me.name, avatarUrl: me.av, message: '',
+  ev.guests = [{ uid: loadMe().uid, name: me.name, avatarUrl: me.av, message: '',
                  invitedLabel: 'Just now', isHost: true, isYou: true, status: 'going' }];
   ev.waiting = invitedList(d).map(function(g){
     return { name: g.name, avatarUrl: g.avatarUrl, message: '',
@@ -4495,8 +4526,8 @@ function createLocalEvent(d){
   });
   ev.maybes = []; ev.cants = [];
   ev.photos = []; ev.requests = [];
-  ev.activity = [{ personName: me.name, personAvatarUrl: me.av, icon: 'check',
-                   isCheck: true, text: 'created this event', whenLabel: '',
+  ev.activity = [{ personUid: loadMe().uid, personName: me.name, personAvatarUrl: me.av,
+                   icon: 'check', isCheck: true, text: 'created this event', whenLabel: '',
                    at: new Date().toISOString(), quote: false }];
   STORE.setEvents(STORE.events.concat([ev]));
   return id;
@@ -5980,19 +6011,31 @@ function eventDock(id){
       toast('Accounts linked'); repaintProfile();
     }
   }
-  /* a profile edit shows up everywhere this uid already appears */
+  /* a profile edit shows up everywhere this uid already appears - the host
+     stamp, every guest list, the doc-riding chat, photos and the feed */
   function propagateMe(){
     var m=loadMe(), av=meAvatar(), uids=myUids();
+    function row(g){
+      if(!g || !g.uid || uids.indexOf(g.uid)<0) return;
+      g.name=m.name||g.name; if(g.uid===m.uid) g.avatarUrl=av;
+    }
     STORE.events.forEach(function(ev){
       if(uids.indexOf(ev.hostUid)>-1){ ev.hostName=m.name||ev.hostName; ev.hostAvatarUrl=av; }
-      (ev.guestPreview||[]).forEach(function(g){
-        if(g.uid===m.uid || uids.indexOf(g.uid)>-1){ g.name=m.name||g.name; if(g.uid===m.uid) g.avatarUrl=av; } });
+      [ev.guestPreview,ev.guests,ev.maybes,ev.cants,ev.waiting,ev.requests]
+        .forEach(function(l){ (l||[]).forEach(row); });
       (ev.messages||[]).forEach(function(msg){
-        if(msg.fromUid===m.uid || uids.indexOf(msg.fromUid)>-1){
+        if(msg.fromUid && uids.indexOf(msg.fromUid)>-1){
           msg.fromName=m.name||msg.fromName; if(msg.fromUid===m.uid) msg.fromAvatarUrl=av; } });
+      (ev.photos||[]).forEach(function(p){
+        if(p.byUid && uids.indexOf(p.byUid)>-1){
+          p.byName=m.name||p.byName; if(p.byUid===m.uid) p.byAvatarUrl=av; } });
+      (ev.activity||[]).forEach(function(a){
+        if(a.personUid && uids.indexOf(a.personUid)>-1){
+          a.personName=m.name||a.personName; if(a.personUid===m.uid) a.personAvatarUrl=av; } });
     });
     if(STORE.mode==='live' && window.D2C && D2C.propagateProfile){
-      D2C.propagateProfile({ uid:m.uid, name:m.name, avatarUrl:av, rsvp:m.rsvp })
+      D2C.propagateProfile({ uid:m.uid, name:m.name, avatarUrl:av, rsvp:m.rsvp,
+                             ids:(m.events||[]).slice() })
         .catch(function(e){ console.warn('propagate failed', e); });
     }
   }
@@ -7322,7 +7365,8 @@ async function createEvent(draft){
       order: Date.now() + i + 1, source: g.source
     })));
   await fs.setDoc(fs.doc(fs.collection(evRef, "activity")), {
-    personName: me.name, personAvatarUrl: me.av, icon: "check", isCheck: true,
+    personUid: me.fsId || "", personName: me.name, personAvatarUrl: me.av,
+    icon: "check", isCheck: true,
     text: "created this event", whenLabel: "Just now",
     at: new Date().toISOString(),
     order: Date.now(), source: "created"
@@ -7431,16 +7475,14 @@ async function deleteEvent(id){
 async function renameLinked(profiles, name, photo){
   const { db, fs } = await initFirebase();
   const vPatch = photo ? { name, photo } : { name };
-  const gPatch = photo ? { name, avatarUrl: photo } : { name };
   for(const p of profiles){
     await fs.setDoc(fs.doc(db, ...FS_ROOT, "visitors", p.uid), vPatch, { merge: true });
     const evs = await fs.getDocs(fs.query(
       fs.collection(db, ...FS_ROOT, "events"), fs.where("hostUid", "==", p.uid)));
-    const ePatch = photo ? { hostName: name, hostAvatarUrl: photo } : { hostName: name };
-    await Promise.all(evs.docs.map(d => fs.updateDoc(d.ref, ePatch)));
-    await Promise.all(Object.keys(p.rsvp || {}).map(id =>
-      fs.setDoc(fs.doc(db, ...FS_ROOT, "events", id, "guests", p.uid),
-        gPatch, { merge: true }).catch(() => {})));
+    const ids = {}; evs.docs.forEach(d => { ids[d.id] = 1; });
+    Object.keys(p.rsvp || {}).forEach(id => { ids[id] = 1; });
+    (p.events || []).forEach(id => { ids[id] = 1; });
+    await pushIdentity(p.uid, name, photo || null, ids, evs.docs);
   }
   ok("profile commonized across " + profiles.length + " linked account(s)");
 }
@@ -7706,17 +7748,59 @@ async function announceGuest(eventId, claimOf){
 }
 
 /* ---------------- profile propagation ---------------- */
+/* rewrite one uid's snapshot rows inside an event doc's own arrays
+   (guestPreview + chatMessages); {} when nothing actually changes */
+function profDocPatch(v, uid, name, av){
+  const fix = (rows, ku, kn, ka) => {
+    let hit = false;
+    const out = (rows || []).map(r => {
+      if(r[ku] !== uid) return r;
+      const n = Object.assign({}, r);
+      n[kn] = name; if(av != null) n[ka] = av;
+      if(n[kn] !== r[kn] || n[ka] !== r[ka]) hit = true;
+      return n;
+    });
+    return hit ? out : null;
+  };
+  const u = {};
+  const gp = fix(v.guestPreview, "uid", "name", "avatarUrl");
+  if(gp) u.guestPreview = gp;
+  const cm = fix(v.chatMessages, "fromUid", "fromName", "fromAvatarUrl");
+  if(cm) u.chatMessages = cm;
+  return u;
+}
+/* stamp one uid's current name/face onto every copy an event keeps: the doc
+   (host fields + the arrays above) and its guest rows - the create/invite
+   writers use auto doc ids, so rows are found by their uid field, never by
+   doc id. av null = name only. Hosted docs ride in pre-fetched.           */
+async function pushIdentity(uid, name, av, ids, hostedDocs){
+  const { db, fs } = await initFirebase();
+  const hosted = {}; (hostedDocs || []).forEach(d => { hosted[d.id] = d; });
+  let evN = 0, rowN = 0;
+  await Promise.all(Object.keys(ids).map(async id => {
+    const evRef = fs.doc(db, ...FS_ROOT, "events", id);
+    const snap = hosted[id] || await fs.getDoc(evRef).catch(() => null);
+    if(!snap || !snap.exists()) return;
+    const u = profDocPatch(snap.data(), uid, name, av);
+    if(hosted[id]){ u.hostName = name; if(av != null) u.hostAvatarUrl = av; }
+    if(Object.keys(u).length){ evN++; await fs.updateDoc(evRef, u).catch(() => {}); }
+    const gPatch = av != null ? { name: name, avatarUrl: av } : { name: name };
+    const gs = await fs.getDocs(fs.query(
+      fs.collection(evRef, "guests"), fs.where("uid", "==", uid))).catch(() => null);
+    if(gs) await Promise.all(gs.docs.map(g => { rowN++;
+      return fs.updateDoc(g.ref, gPatch).catch(() => {}); }));
+  }));
+  return { evN, rowN };
+}
 async function propagateProfile(p){
   const { db, fs } = await initFirebase();
   const evs = await fs.getDocs(fs.query(
     fs.collection(db, ...FS_ROOT, "events"), fs.where("hostUid", "==", p.uid)));
-  await Promise.all(evs.docs.map(d =>
-    fs.updateDoc(d.ref, { hostName: p.name, hostAvatarUrl: p.avatarUrl })));
-  await Promise.all(Object.keys(p.rsvp || {}).map(id =>
-    fs.setDoc(fs.doc(db, ...FS_ROOT, "events", id, "guests", p.uid),
-      { name: p.name, avatarUrl: p.avatarUrl }, { merge: true }).catch(() => {})));
-  ok("profile propagated to " + evs.size + " hosted event(s) and " +
-     Object.keys(p.rsvp || {}).length + " RSVP(s)");
+  const ids = {}; evs.docs.forEach(d => { ids[d.id] = 1; });
+  Object.keys(p.rsvp || {}).forEach(id => { ids[id] = 1; });
+  (p.ids || []).forEach(id => { ids[id] = 1; });
+  const n = await pushIdentity(p.uid, p.name, p.avatarUrl, ids, evs.docs);
+  ok("profile propagated: " + n.evN + " event doc(s), " + n.rowN + " guest row(s)");
 }
 
 /* ---------------- RSVP ----------------
@@ -7942,7 +8026,8 @@ async function watchDetail(id){
   unsubDetail.push(fs.onSnapshot(fs.query(fs.collection(...base, "activity"), fs.orderBy("order", "desc")),
     snap => STORE.setDetail(id, { activity: snap.docs.map(d => {
       const a = d.data();
-      return { personName: a.personName || "Someone", personAvatarUrl: a.personAvatarUrl || "",
+      return { personUid: a.personUid || "", personName: a.personName || "Someone",
+               personAvatarUrl: a.personAvatarUrl || "",
                icon: a.icon || "check", isCheck: !!a.isCheck, text: a.text || "", ms: a.ms || 0,
                whenLabel: a.whenLabel || "",
                /* docs from before `at` existed still carry their ms epoch in

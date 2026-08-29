@@ -2872,21 +2872,30 @@ function guestBuckets(ev){
     return !(g.claimOf ? respondedRow[g.claimOf]
                        : respondedName[g.name.toLowerCase()]);
   });
-  /* my own +1 renders even before (or without) the cloud write landing */
-  ['going','maybe','cant'].forEach(function(k){
-    b[k].forEach(function(g){ if(g.isYou && !g.plus) g.plus = myPlus(ev.id); });
-  });
+  /* local mode: my +1 lives only on this device, so paint it onto my row.
+     Live mode must NOT do this - the stream is the shared truth, and a
+     phantom +N only I can see makes every viewer's total disagree (the
+     watchDetail reconciler pushes an unsynced value up instead). */
+  if(STORE.mode !== 'live')
+    ['going','maybe','cant'].forEach(function(k){
+      b[k].forEach(function(g){ if(g.isYou && !g.plus) g.plus = myPlus(ev.id); });
+    });
   return b;
 }
 /* extras (+1s) brought by people who are officially going - the same rows the
    guests page tags "+N". Live list snapshots rebuild models with guests:null,
    so sums computed from real rows are cached per session (PLUS_SUM) and the
    doc carries a maintained counts.plus for events never opened this session. */
-var PLUS_SUM = {};
+var PLUS_SUM = {}, PLUS_TAP = {};
 function goingPlus(ev, b){
   if(!b){
-    if(ev.guests == null)
-      return PLUS_SUM[ev.id] != null ? PLUS_SUM[ev.id] : (+((ev.counts || {}).plus) || 0);
+    if(ev.guests == null){
+      /* the session cache is measured from real rows, so it beats the doc
+         counter (which may carry drift until the host's heal lands); the
+         doc value only covers events not opened this session */
+      if(PLUS_SUM[ev.id] != null) return PLUS_SUM[ev.id];
+      return +((ev.counts || {}).plus) || 0;
+    }
     b = guestBuckets(ev);
   }
   var n = b.going.reduce(function(s, g){ return s + (+g.plus || 0); }, 0);
@@ -5225,7 +5234,7 @@ function eventDock(id){
       var pid=route().id, pev=findEvent(pid), pm=loadMe();
       var pmax=pev?plusMaxOf(pev):0, po=pm.plus[pid]||0;
       var pn=Math.max(0, Math.min(pmax, po + (+padj.dataset.plusadj)));
-      pm.plus[pid]=pn; saveMe();
+      pm.plus[pid]=pn; PLUS_TAP[pid]=Date.now(); saveMe();
       /* only a going (or host) +N moves the event's headcount counter */
       var pst=myRsvp(pid) || (pev && pev.role==='hosting' ? 'going' : '');
       if(STORE.mode==='live' && window.D2C && D2C.setPlus)
@@ -5234,8 +5243,11 @@ function eventDock(id){
         pn>0?'is bringing +'+pn:'isn’t bringing anyone now');
       var ps=document.getElementById('plus-slot');
       if(ps && pev) ps.innerHTML=plusRowInner(pev);
+      /* live: bump the shown tally by the tap - the stream echo settles the
+         truth. Local mode already repainted from the buckets (no bump). */
       var cg=document.getElementById('c-going');
-      if(cg && pev) cg.textContent=((pev.counts||{}).going||0)+goingPlus(pev);
+      if(cg && pev && pst==='going' && pn!==po && STORE.mode==='live')
+        cg.textContent=(+cg.textContent||0)+(pn-po);
       return;
     }
     var clm=t.closest('[data-claim]');
@@ -7596,8 +7608,9 @@ async function banGuest(eventId, uid, name, erase){
   dead.forEach(d => { const u = d.data().uid; if(u) uids[u] = 1; });
   const patch = { banned: fs.arrayUnion.apply(null, Object.keys(uids)) };
   Object.keys(cut).forEach(s => { patch["counts." + s] = fs.increment(-cut[s]); });
-  if(pcut) patch["counts.plus"] = fs.increment(-pcut);
   await fs.updateDoc(evRef, patch);
+  /* their +N leaves separately and best-effort - never risk the ban write */
+  if(pcut) fs.updateDoc(evRef, { "counts.plus": fs.increment(-pcut) }).catch(() => {});
   /* the ban is what actually locks them out - never report success on faith */
   const now = ((await fs.getDoc(evRef)).data() || {}).banned || [];
   if(now.indexOf(uid) < 0) throw new Error("The removal didn't lock them out - this " +
@@ -7689,13 +7702,16 @@ async function setRsvp(eventId, status, prev, wasReq){
   const inc = {};
   inc["counts." + status] = fs.increment(1);
   if(prev && prev !== status) inc["counts." + prev] = fs.increment(-1);
-  /* my +N only counts toward the headcount while I'm going */
-  const myP = +row.plus || 0;
-  if(myP && status === "going" && prev !== "going") inc["counts.plus"] = fs.increment(myP);
-  else if(myP && prev === "going" && status !== "going") inc["counts.plus"] = fs.increment(-myP);
   /* an approved join request was counted as pending until this answer */
   if(!prev && wasReq) inc["counts.pending"] = fs.increment(-1);
   await fs.updateDoc(evRef, inc);
+  /* my +N follows my going status - a SEPARATE best-effort write, so rules
+     that only know the classic counts keys can never break the RSVP itself */
+  const myP = +row.plus || 0;
+  if(myP && status !== prev){
+    const pd = status === "going" ? myP : (prev === "going" ? -myP : 0);
+    if(pd) fs.updateDoc(evRef, { "counts.plus": fs.increment(pd) }).catch(() => {});
+  }
   /* a first answer absorbs the curated invite row that carried this name */
   if(!prev){
     const nm = (window.loadMe && (loadMe().claims[eventId] || loadMe().name)) || "";
@@ -7803,7 +7819,9 @@ async function connectLive(){
         STORE.setEvents(snap.docs.map(d => docToModel(d.id, d.data())), "live");
         dim("events snapshot: " + snap.size + " docs" +
             (snap.metadata.fromCache ? " (cache)" : ""));
-        if(watchingId) watchDetail(watchingId);   // re-attach if the doc set changed
+        // re-attach if the doc set changed - dropping the old listeners first;
+        // stacking them multiplied reads and snapshot callbacks per update
+        if(watchingId){ stopDetail(); watchDetail(watchingId); }
       },
       e => { err("events listener: " + e.code); useLocalData("Firestore read failed (" + e.code + ")."); }
     );
@@ -7813,6 +7831,7 @@ async function connectLive(){
 }
 
 /* Subcollections stream only while a detail view is open. */
+const PLUS_HEALED = {};   /* host's once-per-value counts.plus heals this session */
 async function watchDetail(id){
   const ev = findEvent(id);
   if(!ev) return;
@@ -7830,19 +7849,42 @@ async function watchDetail(id){
       waiting: all.filter(g => g.status === "pending"),
       requests: all.filter(g => g.status === "request")
     });
-    /* keep the going +1 total honest: the rows are the truth. Cache it for
-       the session (list snapshots drop guest data) and let the HOST write
-       drift back to the doc - that backfills events older than counts.plus. */
+    /* keep the going +1 total honest: the rows are the truth. Cache the sum
+       for the session (list snapshots drop guest data) and stamp the model.
+       The ONLY doc write here is the HOST healing counts.plus with an
+       ABSOLUTE value, at most once per value per session - never an
+       increment, so refreshes and snapshot echoes can never compound it. */
     const psum = all.filter(g => g.status === "going")
                     .reduce((s, g) => s + (+g.plus || 0), 0);
     if(window.PLUS_SUM) PLUS_SUM[id] = psum;
     const evNow = findEvent(id);
-    if(evNow && evNow.counts && (evNow.counts.plus || 0) !== psum){
+    if(evNow && evNow.counts){
+      const docP = +evNow.counts.plus || 0;
       evNow.counts.plus = psum;
-      if(evNow.role === "hosting")
+      if(evNow.role === "hosting" && docP !== psum && PLUS_HEALED[id] !== psum){
+        PLUS_HEALED[id] = psum;
         fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", ev.id), { "counts.plus": psum })
           .catch(() => {});
+      }
     }
+    /* my stepper follows my cloud row - 0 when it has none - so what I see
+       is exactly what everyone sees. A device-local value is never pushed
+       up automatically (that compounded); re-tapping the stepper is the one
+       way a +N enters the cloud. Fresh taps get a grace window so an
+       in-flight write isn't reverted by a stale snapshot. */
+    try {
+      const uids = myUids(), m = loadMe();
+      const mineRaw = snap.docs.map(d => d.data())
+        .filter(v => v.uid && uids.indexOf(v.uid) > -1)
+        .reduce((best, v) => ("plus" in v) ? v : (best || v), null);
+      const cloudP = mineRaw ? (+mineRaw.plus || 0) : 0;
+      const tapped = window.PLUS_TAP && (Date.now() - (PLUS_TAP[id] || 0)) < 8000;
+      if(!tapped && (+((m.plus || {})[id]) || 0) !== cloudP){
+        m.plus[id] = cloudP;
+        try{ localStorage.setItem("d2c.me.v1", JSON.stringify(m)); }catch(e){}
+        STORE.notify();
+      }
+    } catch(e){}
   }, e => err("guests: " + e.code)));
 
   unsubDetail.push(fs.onSnapshot(fs.query(fs.collection(...base, "photos"), fs.orderBy("order", "desc")),

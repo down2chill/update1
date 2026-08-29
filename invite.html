@@ -1692,6 +1692,7 @@ var STORE = {
    profile into Firestore under visitors/{uid}.
    ========================================================= */
 var ME_KEY = 'd2c.me.v1', REG_KEY = 'd2c.visitors.v1', ME = null;
+var ME_DIRTY = {};   /* profile fields typed but not yet saved */
 var repaintMe = function(){}, promptVerify = function(){}, promptLinkChoice = function(){};
 
 function newUid(){
@@ -1738,7 +1739,11 @@ function refreshMe(){
   try{
     var s = JSON.parse(localStorage.getItem(ME_KEY) || 'null');
     if(s && s.uid && ME && s.uid === ME.uid && (s.at || 0) > (ME.at || 0)){
+      var old = ME, k;
       ME = null; loadMe();
+      /* typing in progress outranks a background context's save - without
+         this, a stale tab's routine sync could eat a just-entered number */
+      for(k in ME_DIRTY) ME[k] = old[k];
       remapRoles(); STORE.notify(); repaintMe();
     }
   }catch(e){}
@@ -1924,6 +1929,7 @@ function saveMe(){
     localStorage.setItem(ME_KEY, JSON.stringify(m));
     localStorage.setItem(REG_KEY, JSON.stringify(reg));
   }catch(e){}
+  ME_DIRTY = {};   /* the typed values are persisted now */
   if(STORE.mode === 'live' && window.D2C && D2C.saveProfile){
     D2C.saveProfile({ uid: m.uid, name: m.name, phone: normPhone(m.phone),
                       verified: phoneVerified(), verifiedAt: m.verifiedAt || 0,
@@ -5691,7 +5697,7 @@ function eventDock(id){
 
   document.addEventListener('input',function(e){
     var mk=e.target.getAttribute && e.target.getAttribute('data-me');
-    if(mk){ loadMe()[mk]=e.target.value; return; }
+    if(mk){ loadMe()[mk]=e.target.value; ME_DIRTY[mk]=1; return; }
     if(e.target.id==='cv-in'){
       var cvc=document.getElementById('cv-count');
       if(cvc) cvc.textContent=e.target.value.length+' / 80';

@@ -2939,28 +2939,36 @@ function guestBuckets(ev){
    guests page tags "+N". Live list snapshots rebuild models with guests:null,
    so sums computed from real rows are cached per session (PLUS_SUM) and the
    doc carries a maintained counts.plus for events never opened this session. */
-/* measured going-plus sums persist per device (d2c.plus.v1): a refresh must
-   not fall back to a drifted doc counter once real rows have been seen */
+/* measured going-plus sums persist per device (d2c.plus.v1) as {n,d} pairs:
+   n = the folded row sum, d = the doc counts.plus it corresponds to. The
+   cache masks a drifted doc counter, but ONLY while the doc still says d -
+   once the (heal-maintained) doc moves, the doc is the newer truth and a
+   stale cache must yield, or another session's +N change never reaches
+   this device's home page. */
 var PLUS_KEY = 'd2c.plus.v1', PLUS_TAP = {}, PLUS_SUM = {};
 try{ PLUS_SUM = JSON.parse(localStorage.getItem(PLUS_KEY) || '{}') || {}; }catch(e){}
-function notePlusSum(id, n){
-  if(PLUS_SUM[id] === n) return;
-  PLUS_SUM[id] = n;
+function notePlusSum(id, n, d){
+  var c = PLUS_SUM[id];
+  if(c && typeof c === 'object' && c.n === n && c.d === d) return;
+  PLUS_SUM[id] = { n: n, d: d };
   try{ localStorage.setItem(PLUS_KEY, JSON.stringify(PLUS_SUM)); }catch(e){}
 }
 function goingPlus(ev, b){
   if(!b){
     if(ev.guests == null){
-      /* the session cache is measured from real rows, so it beats the doc
-         counter (which may carry drift until the host's heal lands); the
-         doc value only covers events not opened this session */
-      if(PLUS_SUM[ev.id] != null) return PLUS_SUM[ev.id];
-      return +((ev.counts || {}).plus) || 0;
+      var c = PLUS_SUM[ev.id], docP = +((ev.counts || {}).plus) || 0;
+      if(typeof c === 'number') c = { n: c, d: c };   /* pre-pairing entry */
+      if(c && c.n != null){
+        if(c.d === docP) return c.n;
+        notePlusSum(ev.id, docP, docP);   /* doc moved - adopt it */
+        return docP;
+      }
+      return docP;
     }
     b = guestBuckets(ev);
   }
   var n = b.going.reduce(function(s, g){ return s + (+g.plus || 0); }, 0);
-  notePlusSum(ev.id, n);
+  notePlusSum(ev.id, n, n);
   return n;
 }
 /* headcount: everyone going plus everyone they bring */
@@ -5301,10 +5309,10 @@ function eventDock(id){
       var pmax=pev?plusMaxOf(pev):0, po=pm.plus[pid]||0;
       var pn=Math.max(0, Math.min(pmax, po + (+padj.dataset.plusadj)));
       pm.plus[pid]=pn; PLUS_TAP[pid]=Date.now(); saveMe();
-      /* only a going (or host) +N moves the event's headcount counter */
+      /* the doc's counts.plus follows via the guests-stream heal */
       var pst=myRsvp(pid) || (pev && pev.role==='hosting' ? 'going' : '');
       if(STORE.mode==='live' && window.D2C && D2C.setPlus)
-        D2C.setPlus(pid, pn, pst==='going' ? pn-po : 0).catch(function(){});
+        D2C.setPlus(pid, pn).catch(function(){});
       else appendLocalActivity(pid, 'user-plus',
         pn>0?'is bringing +'+pn:'isn’t bringing anyone now');
       var ps=document.getElementById('plus-slot');
@@ -7488,7 +7496,7 @@ async function renameLinked(profiles, name, photo){
 }
 
 /* ---------------- how many extras a guest brings ---------------- */
-async function setPlus(eventId, n, delta){
+async function setPlus(eventId, n){
   const { db, fs } = await initFirebase();
   const me = meIdent();
   const patch = { uid: me.fsId || "", name: me.name, avatarUrl: me.av, plus: n, authUid: authUid() };
@@ -7499,10 +7507,22 @@ async function setPlus(eventId, n, delta){
                            invitedLabel: "Hosting", order: Date.now(), source: "plus" });
   await fs.setDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "guests", me.fsId || "anon"),
     patch, { merge: true });
-  /* caller passes the going-headcount change (0 when I'm only a maybe) */
-  if(delta)
-    await fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", eventId),
-      { "counts.plus": fs.increment(delta) }).catch(() => {});
+  /* NO counts.plus increment here: the tapper's own guests stream is open, so
+     the row echo heals the doc with an absolute folded sum - an increment on
+     top of that raced the heal and double-applied the change */
+  /* one +N per person: strip plus left on my OTHER rows (the auto-id created
+     host row, rows from previously-linked uids) so folded sums stay single */
+  try {
+    const uids = window.myUids ? myUids() : [me.fsId];
+    await Promise.all(uids.filter(Boolean).map(async u => {
+      const gs = await fs.getDocs(fs.query(
+        fs.collection(db, ...FS_ROOT, "events", eventId, "guests"),
+        fs.where("uid", "==", u)));
+      await Promise.all(gs.docs
+        .filter(d => d.id !== (me.fsId || "anon") && +((d.data() || {}).plus || 0))
+        .map(d => fs.updateDoc(d.ref, { plus: 0 }).catch(() => {})));
+    }));
+  } catch(e){}
   logActivity(eventId, "user-plus", n > 0 ? "is bringing +" + n : "isn’t bringing anyone now");
 }
 
@@ -7676,11 +7696,9 @@ async function banGuest(eventId, uid, name, erase){
   const gone = (await Promise.all(dead.map(d =>
     fs.deleteDoc(d.ref).then(() => d, () => null)))).filter(Boolean);
   const cut = {};
-  let pcut = 0;
   gone.forEach(d => {
     const v = d.data(), s = v.status;
     if(/^(going|maybe|cant|pending)$/.test(s)) cut[s] = (cut[s] || 0) + 1;
-    if(s === "going") pcut += (+v.plus || 0);   /* their +N leaves with them */
   });
   /* ban every uid their rows carried, not just the one clicked - a person can
      hold rows under more than one visitor id (second device, relinked phone) */
@@ -7689,8 +7707,8 @@ async function banGuest(eventId, uid, name, erase){
   const patch = { banned: fs.arrayUnion.apply(null, Object.keys(uids)) };
   Object.keys(cut).forEach(s => { patch["counts." + s] = fs.increment(-cut[s]); });
   await fs.updateDoc(evRef, patch);
-  /* their +N leaves separately and best-effort - never risk the ban write */
-  if(pcut) fs.updateDoc(evRef, { "counts.plus": fs.increment(-pcut) }).catch(() => {});
+  /* their +N leaves via the guests-stream heal (the host is on the guests
+     page, its stream is open) - an increment here raced that heal */
   /* the ban is what actually locks them out - never report success on faith */
   const now = ((await fs.getDoc(evRef)).data() || {}).banned || [];
   if(now.indexOf(uid) < 0) throw new Error("The removal didn't lock them out - this " +
@@ -7827,13 +7845,9 @@ async function setRsvp(eventId, status, prev, wasReq){
   /* an approved join request was counted as pending until this answer */
   if(!prev && wasReq) inc["counts.pending"] = fs.increment(-1);
   await fs.updateDoc(evRef, inc);
-  /* my +N follows my going status - a SEPARATE best-effort write, so rules
-     that only know the classic counts keys can never break the RSVP itself */
-  const myP = +row.plus || 0;
-  if(myP && status !== prev){
-    const pd = status === "going" ? myP : (prev === "going" ? -myP : 0);
-    if(pd) fs.updateDoc(evRef, { "counts.plus": fs.increment(pd) }).catch(() => {});
-  }
+  /* counts.plus is NOT incremented here: the answerer is on the event page,
+     so their guests stream heals the doc with an absolute folded sum - an
+     increment raced that heal and double-applied my +N */
   /* a first answer absorbs the curated invite row that carried this name */
   if(!prev){
     const nm = (window.loadMe && (loadMe().claims[eventId] || loadMe().name)) || "";
@@ -7971,15 +7985,19 @@ async function watchDetail(id){
       waiting: all.filter(g => g.status === "pending"),
       requests: all.filter(g => g.status === "request")
     });
-    /* keep the going +1 total honest: the rows are the truth. Cache the sum
-       for the session (list snapshots drop guest data) and stamp the model.
-       The ONLY doc write here is the HOST healing counts.plus with an
-       ABSOLUTE value, at most once per value per session - never an
-       increment, so refreshes and snapshot echoes can never compound it. */
-    const psum = all.filter(g => g.status === "going")
-                    .reduce((s, g) => s + (+g.plus || 0), 0);
-    if(window.notePlusSum) notePlusSum(id, psum);
+    /* keep the going +1 total honest: the FOLDED rows are the truth - one
+       person can hold several going docs (the created host row + their
+       uid-keyed +N row, linked-uid leftovers) and raw rows double-count
+       their +N. guestBuckets folds exactly like every display surface, so
+       the cached/healed sum always equals what the pages show. The ONLY
+       doc write here is the ABSOLUTE counts.plus heal, at most once per
+       value per session - never an increment, so echoes can't compound. */
     const evNow = findEvent(id);
+    const psum = (evNow && evNow.guests && window.guestBuckets)
+      ? guestBuckets(evNow).going.reduce((s, g) => s + (+g.plus || 0), 0)
+      : all.filter(g => g.status === "going")
+           .reduce((s, g) => s + (+g.plus || 0), 0);
+    if(window.notePlusSum) notePlusSum(id, psum, psum);
     if(evNow && evNow.counts){
       const docP = +evNow.counts.plus || 0;
       evNow.counts.plus = psum;
@@ -8000,9 +8018,12 @@ async function watchDetail(id){
        in-flight write isn't reverted by a stale snapshot. */
     try {
       const uids = myUids(), m = loadMe();
+      /* my CURRENT uid's plus-bearing row outranks a linked/old one, so the
+         stepper never adopts a stale +N left on a superseded row */
+      const rank = v => (("plus" in v) ? 2 : 0) + (v.uid === m.uid ? 1 : 0);
       const mineRaw = snap.docs.map(d => d.data())
         .filter(v => v.uid && uids.indexOf(v.uid) > -1)
-        .reduce((best, v) => ("plus" in v) ? v : (best || v), null);
+        .reduce((best, v) => (!best || rank(v) > rank(best)) ? v : best, null);
       const cloudP = mineRaw ? (+mineRaw.plus || 0) : 0;
       const tapped = window.PLUS_TAP && (Date.now() - (PLUS_TAP[id] || 0)) < 8000;
       if(!tapped && (+((m.plus || {})[id]) || 0) !== cloudP){

@@ -2039,7 +2039,8 @@ function docToModel(id, d){
     role: (d.hostUid && myUids().indexOf(d.hostUid) > -1) ? "hosting" : "invited",
     coverUrl: d.coverUrl || "", thumbUrl: d.thumbUrl || d.coverUrl || "", mapUrl: d.mapUrl || "",
     hostUid: d.hostUid || "", hostName: d.hostName || "Host", hostAvatarUrl: d.hostAvatarUrl || "",
-    counts: { going: c.going||0, maybe: c.maybe||0, cant: c.cant||0, pending: c.pending||0 },
+    counts: { going: c.going||0, maybe: c.maybe||0, cant: c.cant||0, pending: c.pending||0,
+              plus: c.plus||0 },
     guestPreview: d.guestPreview || [],
     photoCount: d.photoCount || 0, lastPhotoLabel: d.lastPhotoLabel || "",
     /* messages ride along on the event document, so they are realtime for
@@ -2631,7 +2632,7 @@ function renderEvent(id){
     : ev.guestPreview.slice(0,5);
   var gplus=goingPlus(ev, gb);
   var extra=Math.max(0, Math.max(c.going, gb?gb.going.length:0)+gplus-gs.length);
-  var total=c.going+c.maybe+c.cant;
+  var total=c.going+gplus+c.maybe+c.cant;
 
   var mayPost = canPost(ev);
   var photosBlock = ev.photos
@@ -2743,7 +2744,7 @@ function renderEvent(id){
           (extra?'<div class="guest"><a class="more-g" href="#guests/'+ev.id+'" data-nav><b>+'+extra+
             '</b><small>View all</small></a></div>':'')+
         '</div>'+
-        '<p class="tally"><b>'+c.going+'</b> going <i>\u00B7</i> <b>'+c.maybe+'</b> maybe <i>\u00B7</i> <b>'+
+        '<p class="tally"><b>'+(c.going+gplus)+'</b> going <i>\u00B7</i> <b>'+c.maybe+'</b> maybe <i>\u00B7</i> <b>'+
           c.cant+'</b> can\u2019t go</p>'+
         '<p class="center" style="margin:12px 0 0"><a class="link-row" href="#guests/'+ev.id+
           '" data-nav>View all '+total+' guests '+ico('arr')+'</a></p>'+
@@ -2878,13 +2879,19 @@ function guestBuckets(ev){
   return b;
 }
 /* extras (+1s) brought by people who are officially going - the same rows the
-   guests page tags "+N". Before the guest stream lands there's nothing to sum. */
+   guests page tags "+N". Live list snapshots rebuild models with guests:null,
+   so sums computed from real rows are cached per session (PLUS_SUM) and the
+   doc carries a maintained counts.plus for events never opened this session. */
+var PLUS_SUM = {};
 function goingPlus(ev, b){
   if(!b){
-    if(ev.guests == null) return +((ev.counts || {}).plus) || 0;
+    if(ev.guests == null)
+      return PLUS_SUM[ev.id] != null ? PLUS_SUM[ev.id] : (+((ev.counts || {}).plus) || 0);
     b = guestBuckets(ev);
   }
-  return b.going.reduce(function(s, g){ return s + (+g.plus || 0); }, 0);
+  var n = b.going.reduce(function(s, g){ return s + (+g.plus || 0); }, 0);
+  PLUS_SUM[ev.id] = n;
+  return n;
 }
 /* headcount: everyone going plus everyone they bring */
 function goingTotal(ev, b){ return (((ev.counts || {}).going) || 0) + goingPlus(ev, b); }
@@ -5216,11 +5223,13 @@ function eventDock(id){
     var padj=t.closest('[data-plusadj]');
     if(padj && !padj.disabled){
       var pid=route().id, pev=findEvent(pid), pm=loadMe();
-      var pmax=pev?plusMaxOf(pev):0;
-      var pn=Math.max(0, Math.min(pmax, (pm.plus[pid]||0) + (+padj.dataset.plusadj)));
+      var pmax=pev?plusMaxOf(pev):0, po=pm.plus[pid]||0;
+      var pn=Math.max(0, Math.min(pmax, po + (+padj.dataset.plusadj)));
       pm.plus[pid]=pn; saveMe();
+      /* only a going (or host) +N moves the event's headcount counter */
+      var pst=myRsvp(pid) || (pev && pev.role==='hosting' ? 'going' : '');
       if(STORE.mode==='live' && window.D2C && D2C.setPlus)
-        D2C.setPlus(pid, pn).catch(function(){});
+        D2C.setPlus(pid, pn, pst==='going' ? pn-po : 0).catch(function(){});
       else appendLocalActivity(pid, 'user-plus',
         pn>0?'is bringing +'+pn:'isn’t bringing anyone now');
       var ps=document.getElementById('plus-slot');
@@ -6541,7 +6550,8 @@ function eventDock(id){
     if(m.events.indexOf(id)<0) m.events.push(id);
     saveMe();
     if(ev) ev.counts={going:n.going, maybe:n.maybe, cant:n.cant,
-                      pending:(ev.counts&&ev.counts.pending)||0};
+                      pending:(ev.counts&&ev.counts.pending)||0,
+                      plus:(ev.counts&&ev.counts.plus)||0};
     /* first answer: my waiting presence is absorbed by my response - the
        curated uid-less row under my name, and my own approved-request row.
        Only rows that were counted move the pending counter (an approved
@@ -7386,7 +7396,7 @@ async function renameLinked(profiles, name, photo){
 }
 
 /* ---------------- how many extras a guest brings ---------------- */
-async function setPlus(eventId, n){
+async function setPlus(eventId, n, delta){
   const { db, fs } = await initFirebase();
   const me = meIdent();
   const patch = { uid: me.fsId || "", name: me.name, avatarUrl: me.av, plus: n, authUid: authUid() };
@@ -7397,6 +7407,10 @@ async function setPlus(eventId, n){
                            invitedLabel: "Hosting", order: Date.now(), source: "plus" });
   await fs.setDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "guests", me.fsId || "anon"),
     patch, { merge: true });
+  /* caller passes the going-headcount change (0 when I'm only a maybe) */
+  if(delta)
+    await fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", eventId),
+      { "counts.plus": fs.increment(delta) }).catch(() => {});
   logActivity(eventId, "user-plus", n > 0 ? "is bringing +" + n : "isn’t bringing anyone now");
 }
 
@@ -7570,9 +7584,11 @@ async function banGuest(eventId, uid, name, erase){
   const gone = (await Promise.all(dead.map(d =>
     fs.deleteDoc(d.ref).then(() => d, () => null)))).filter(Boolean);
   const cut = {};
+  let pcut = 0;
   gone.forEach(d => {
-    const s = d.data().status;
+    const v = d.data(), s = v.status;
     if(/^(going|maybe|cant|pending)$/.test(s)) cut[s] = (cut[s] || 0) + 1;
+    if(s === "going") pcut += (+v.plus || 0);   /* their +N leaves with them */
   });
   /* ban every uid their rows carried, not just the one clicked - a person can
      hold rows under more than one visitor id (second device, relinked phone) */
@@ -7580,6 +7596,7 @@ async function banGuest(eventId, uid, name, erase){
   dead.forEach(d => { const u = d.data().uid; if(u) uids[u] = 1; });
   const patch = { banned: fs.arrayUnion.apply(null, Object.keys(uids)) };
   Object.keys(cut).forEach(s => { patch["counts." + s] = fs.increment(-cut[s]); });
+  if(pcut) patch["counts.plus"] = fs.increment(-pcut);
   await fs.updateDoc(evRef, patch);
   /* the ban is what actually locks them out - never report success on faith */
   const now = ((await fs.getDoc(evRef)).data() || {}).banned || [];
@@ -7672,6 +7689,10 @@ async function setRsvp(eventId, status, prev, wasReq){
   const inc = {};
   inc["counts." + status] = fs.increment(1);
   if(prev && prev !== status) inc["counts." + prev] = fs.increment(-1);
+  /* my +N only counts toward the headcount while I'm going */
+  const myP = +row.plus || 0;
+  if(myP && status === "going" && prev !== "going") inc["counts.plus"] = fs.increment(myP);
+  else if(myP && prev === "going" && status !== "going") inc["counts.plus"] = fs.increment(-myP);
   /* an approved join request was counted as pending until this answer */
   if(!prev && wasReq) inc["counts.pending"] = fs.increment(-1);
   await fs.updateDoc(evRef, inc);
@@ -7809,6 +7830,19 @@ async function watchDetail(id){
       waiting: all.filter(g => g.status === "pending"),
       requests: all.filter(g => g.status === "request")
     });
+    /* keep the going +1 total honest: the rows are the truth. Cache it for
+       the session (list snapshots drop guest data) and let the HOST write
+       drift back to the doc - that backfills events older than counts.plus. */
+    const psum = all.filter(g => g.status === "going")
+                    .reduce((s, g) => s + (+g.plus || 0), 0);
+    if(window.PLUS_SUM) PLUS_SUM[id] = psum;
+    const evNow = findEvent(id);
+    if(evNow && evNow.counts && (evNow.counts.plus || 0) !== psum){
+      evNow.counts.plus = psum;
+      if(evNow.role === "hosting")
+        fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", ev.id), { "counts.plus": psum })
+          .catch(() => {});
+    }
   }, e => err("guests: " + e.code)));
 
   unsubDetail.push(fs.onSnapshot(fs.query(fs.collection(...base, "photos"), fs.orderBy("order", "desc")),

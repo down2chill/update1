@@ -1392,6 +1392,26 @@ var DEF_COVER = 'data:image/svg+xml,'+encodeURIComponent(
   '<path d="M0 528 Q150 474 306 520 Q410 550 480 508 V600 H0 Z" fill="#7683f2"/>'+
   '</svg>');
 
+/* stand-in for events with no map image (live-created ones never get one) -
+   a quiet street grid so the pin and venue label sit on something map-like */
+var DEF_MAP = 'data:image/svg+xml,'+encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 270">'+
+  '<rect width="480" height="270" fill="#e8eee6"/>'+
+  '<g fill="#dbe7d6"><rect x="18" y="22" width="120" height="84" rx="8"/>'+
+  '<rect x="352" y="150" width="106" height="96" rx="8"/></g>'+
+  '<path d="M-10 236 Q90 196 170 232 Q260 272 330 240 L330 290 L-10 290 Z" fill="#cfe0ea" opacity=".85"/>'+
+  '<g stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".9">'+
+  '<path d="M-10 130 H490" fill="none"/><path d="M160 -10 V280" fill="none"/>'+
+  '<path d="M330 -10 V280" fill="none"/></g>'+
+  '<g stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".75">'+
+  '<path d="M-10 60 H490" fill="none"/><path d="M-10 196 H330" fill="none"/>'+
+  '<path d="M64 -10 V130" fill="none"/><path d="M244 60 V280" fill="none"/>'+
+  '<path d="M406 -10 V150" fill="none"/></g>'+
+  '<path d="M-10 24 Q140 44 260 20 Q380 -2 490 30" fill="none" stroke="#f6e7c8" stroke-width="7" stroke-linecap="round" opacity=".9"/>'+
+  '<g fill="#c9dbc2"><circle cx="52" cy="160" r="7"/><circle cx="200" cy="94" r="6"/>'+
+  '<circle cx="376" cy="96" r="7"/><circle cx="290" cy="170" r="5"/></g>'+
+  '</svg>');
+
 /* Local records use a short authored id. Firestore assigns the real document id
    at seed time and it is written back onto each record as .fsId               */
 var SEED_PEOPLE = [
@@ -2816,7 +2836,7 @@ function renderEvent(id){
       '</section>'+
       '<section class="sec"><div class="sec-h"><h2>Location</h2></div>'+
         '<div class="map-card"><div class="map">'+
-          img(ev.mapUrl,'Map showing '+ev.venue)+
+          img(ev.mapUrl||DEF_MAP,'Map showing '+ev.venue)+
           '<span class="pin">'+ico('pin-fill')+'</span>'+
           '<span class="map-label">'+h(ev.venue)+'</span></div>'+
           '<div class="map-foot"><div><b>'+h(ev.venue)+'</b><span>'+h(ev.address)+'</span></div>'+

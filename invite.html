@@ -1477,20 +1477,49 @@ function defCover(id){
     var fy = Math.round(u*u*ay + 2*u*t*by + t*t*ey);
     s += '<path d="M'+fx+' '+fy+' l9 '+riv(19, 23)+' 9-'+riv(18, 21)+'Z" fill="'+COV_ACC[(c0 + i) % COV_ACC.length]+'"/>';
   }
-  /* three hill layers share one seeded flow direction; the tent sits between
-     the middle and front layers, like the original scene */
+  /* three hill layers share one seeded flow direction; params are kept so
+     the tent can anchor to a real point on a crest */
   var dir = R() < .5 ? 1 : -1;
-  function hill(y0, col){
-    return '<path d="M0 '+y0+' Q130 '+(y0 - riv(50, 90) * dir)+' 264 '+(y0 + riv(-26, 10) * dir)+
-      ' Q380 '+(y0 + riv(24, 54) * dir)+' 480 '+(y0 - riv(18, 48) * dir)+' V600 H0 Z" fill="'+col+'"/>';
+  function mkHill(y0, col){
+    var H = { y0: y0, y1: y0 - riv(50, 90) * dir, y2: y0 + riv(-26, 10) * dir,
+              y3: y0 + riv(24, 54) * dir, y4: y0 - riv(18, 48) * dir };
+    H.path = '<path d="M0 '+H.y0+' Q130 '+H.y1+' 264 '+H.y2+' Q380 '+H.y3+' 480 '+H.y4+
+      ' V600 H0 Z" fill="'+col+'"/>';
+    return H;
   }
-  s += hill(riv(400, 446), P.hills[0]) + hill(riv(456, 492), P.hills[1]);
-  var tx = riv(96, 344), ty = riv(382, 412), ts = riv(80, 120) / 100;
-  s += '<g transform="translate('+tx+' '+ty+') scale('+ts+')">'+
+  /* y of a hill's crest line at x - each half is one quadratic whose x(t) is
+     monotone, so a short bisection recovers t */
+  function hillAt(H, x){
+    var p = x <= 264 ? [0, H.y0, 130, H.y1, 264, H.y2] : [264, H.y2, 380, H.y3, 480, H.y4];
+    var lo = 0, hi = 1, t, u, k;
+    for(k = 0; k < 18; k++){ t = (lo + hi) / 2; u = 1 - t;
+      if(u*u*p[0] + 2*u*t*p[2] + t*t*p[4] < x) lo = t; else hi = t; }
+    t = (lo + hi) / 2; u = 1 - t;
+    return u*u*p[1] + 2*u*t*p[3] + t*t*p[5];
+  }
+  /* where the tent's base must sit to touch this hill: the lowest crest
+     point under either foot, so no corner ever hangs over a downslope */
+  function seatY(H, x, hw){
+    return Math.max(hillAt(H, x - hw), hillAt(H, x), hillAt(H, x + hw));
+  }
+  var Hs = [ mkHill(riv(400, 446), P.hills[0]), mkHill(riv(456, 492), P.hills[1]),
+             mkHill(riv(506, 538), P.hills[2]) ];
+  /* tent: x and size as drawn; y ANCHORS to the layer whose surface at that x
+     is closest to the drawn aim - advancing a layer whenever the next crest
+     would swallow it - and renders right after its layer, so nearer hills
+     still pass in front of its feet */
+  var tx = riv(96, 344), ty0 = riv(382, 412), ts = riv(80, 120) / 100;
+  var hw = Math.round(36 * ts), aimBase = ty0 + 62 * ts, ki = 0, bd = 1e9, dy2;
+  for(i = 0; i < 3; i++){ dy2 = Math.abs(hillAt(Hs[i], tx) - aimBase);
+    if(dy2 < bd){ bd = dy2; ki = i; } }
+  while(ki < 2 && hillAt(Hs[ki + 1], tx) < hillAt(Hs[ki], tx) + 26) ki++;
+  var ty = Math.round(seatY(Hs[ki], tx, hw) + 4 - 62 * ts);
+  var tent = '<g transform="translate('+tx+' '+ty+') scale('+ts+')">'+
     '<path d="M0 0 v-24 l28 8 -28 8" fill="#f7b733"/>'+
     '<path d="M0 0 l36 62 h-72 Z" fill="'+COV_TENT[Math.floor(R() * COV_TENT.length)]+'"/>'+
     '<path d="M0 0 l12 62 h-24 Z" fill="#eef0fb"/></g>';
-  s += hill(riv(506, 538), P.hills[2]) + '</svg>';
+  s += Hs[0].path + (ki === 0 ? tent : '') + Hs[1].path + (ki === 1 ? tent : '') +
+       Hs[2].path + (ki === 2 ? tent : '') + '</svg>';
   return (COV_MEMO[key] = 'data:image/svg+xml,' + encodeURIComponent(s));
 }
 var DEF_COVER = defCover('');

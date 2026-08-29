@@ -2886,7 +2886,15 @@ function guestBuckets(ev){
    guests page tags "+N". Live list snapshots rebuild models with guests:null,
    so sums computed from real rows are cached per session (PLUS_SUM) and the
    doc carries a maintained counts.plus for events never opened this session. */
-var PLUS_SUM = {}, PLUS_TAP = {};
+/* measured going-plus sums persist per device (d2c.plus.v1): a refresh must
+   not fall back to a drifted doc counter once real rows have been seen */
+var PLUS_KEY = 'd2c.plus.v1', PLUS_TAP = {}, PLUS_SUM = {};
+try{ PLUS_SUM = JSON.parse(localStorage.getItem(PLUS_KEY) || '{}') || {}; }catch(e){}
+function notePlusSum(id, n){
+  if(PLUS_SUM[id] === n) return;
+  PLUS_SUM[id] = n;
+  try{ localStorage.setItem(PLUS_KEY, JSON.stringify(PLUS_SUM)); }catch(e){}
+}
 function goingPlus(ev, b){
   if(!b){
     if(ev.guests == null){
@@ -2899,7 +2907,7 @@ function goingPlus(ev, b){
     b = guestBuckets(ev);
   }
   var n = b.going.reduce(function(s, g){ return s + (+g.plus || 0); }, 0);
-  PLUS_SUM[ev.id] = n;
+  notePlusSum(ev.id, n);
   return n;
 }
 /* headcount: everyone going plus everyone they bring */
@@ -7856,12 +7864,16 @@ async function watchDetail(id){
        increment, so refreshes and snapshot echoes can never compound it. */
     const psum = all.filter(g => g.status === "going")
                     .reduce((s, g) => s + (+g.plus || 0), 0);
-    if(window.PLUS_SUM) PLUS_SUM[id] = psum;
+    if(window.notePlusSum) notePlusSum(id, psum);
     const evNow = findEvent(id);
     if(evNow && evNow.counts){
       const docP = +evNow.counts.plus || 0;
       evNow.counts.plus = psum;
-      if(evNow.role === "hosting" && docP !== psum && PLUS_HEALED[id] !== psum){
+      /* ANY viewer may heal a drifted doc counter - the write is an ABSOLUTE
+         row-derived value (never an increment, so it can't compound), fires
+         at most once per value per session, and is best-effort in case the
+         rules only let the host update the event doc */
+      if(docP !== psum && PLUS_HEALED[id] !== psum){
         PLUS_HEALED[id] = psum;
         fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", ev.id), { "counts.plus": psum })
           .catch(() => {});

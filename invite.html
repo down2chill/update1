@@ -2872,14 +2872,10 @@ function guestBuckets(ev){
     return !(g.claimOf ? respondedRow[g.claimOf]
                        : respondedName[g.name.toLowerCase()]);
   });
-  /* local mode: my +1 lives only on this device, so paint it onto my row.
-     Live mode must NOT do this - the stream is the shared truth, and a
-     phantom +N only I can see makes every viewer's total disagree (the
-     watchDetail reconciler pushes an unsynced value up instead). */
-  if(STORE.mode !== 'live')
-    ['going','maybe','cant'].forEach(function(k){
-      b[k].forEach(function(g){ if(g.isYou && !g.plus) g.plus = myPlus(ev.id); });
-    });
+  /* my own +1 renders even before (or without) the cloud write landing */
+  ['going','maybe','cant'].forEach(function(k){
+    b[k].forEach(function(g){ if(g.isYou && !g.plus) g.plus = myPlus(ev.id); });
+  });
   return b;
 }
 /* extras (+1s) brought by people who are officially going - the same rows the
@@ -2889,12 +2885,8 @@ function guestBuckets(ev){
 var PLUS_SUM = {};
 function goingPlus(ev, b){
   if(!b){
-    if(ev.guests == null){
-      /* the doc counter is live via the list stream, so it wins when set;
-         the session cache only covers docs the host hasn't healed yet */
-      var dp = +((ev.counts || {}).plus) || 0;
-      return dp || PLUS_SUM[ev.id] || 0;
-    }
+    if(ev.guests == null)
+      return PLUS_SUM[ev.id] != null ? PLUS_SUM[ev.id] : (+((ev.counts || {}).plus) || 0);
     b = guestBuckets(ev);
   }
   var n = b.going.reduce(function(s, g){ return s + (+g.plus || 0); }, 0);
@@ -5242,11 +5234,8 @@ function eventDock(id){
         pn>0?'is bringing +'+pn:'isn’t bringing anyone now');
       var ps=document.getElementById('plus-slot');
       if(ps && pev) ps.innerHTML=plusRowInner(pev);
-      /* live: bump the shown tally by the tap - the stream echo settles the
-         truth. Local mode already repainted from the buckets (no bump). */
       var cg=document.getElementById('c-going');
-      if(cg && pev && pst==='going' && pn!==po && STORE.mode==='live')
-        cg.textContent=(+cg.textContent||0)+(pn-po);
+      if(cg && pev) cg.textContent=((pev.counts||{}).going||0)+goingPlus(pev);
       return;
     }
     var clm=t.closest('[data-claim]');
@@ -7854,27 +7843,6 @@ async function watchDetail(id){
         fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", ev.id), { "counts.plus": psum })
           .catch(() => {});
     }
-    /* my own +N: a cloud row that never learned it (set while offline, or
-       before live connected) gets it pushed up ONCE - the row gaining a
-       plus key ends the pushes. Any row that has the key is authoritative:
-       my local copy adopts it, so my view always matches everyone else's. */
-    try {
-      const uids = myUids(), m = loadMe();
-      const mineRaw = snap.docs.map(d => d.data())
-        .find(v => v.uid && uids.indexOf(v.uid) > -1);
-      const localP = +((m.plus || {})[id]) || 0;
-      const st = (window.myRsvp && myRsvp(id)) ||
-                 (evNow && evNow.role === "hosting" ? "going" : "");
-      if(mineRaw && ("plus" in mineRaw)){
-        if((+mineRaw.plus || 0) !== localP){
-          m.plus[id] = +mineRaw.plus || 0;
-          try{ localStorage.setItem("d2c.me.v1", JSON.stringify(m)); }catch(e){}
-          STORE.notify();
-        }
-      } else if(localP > 0 && /^(going|maybe)$/.test(st)){
-        setPlus(id, localP, st === "going" ? localP : 0).catch(() => {});
-      }
-    } catch(e){}
   }, e => err("guests: " + e.code)));
 
   unsubDetail.push(fs.onSnapshot(fs.query(fs.collection(...base, "photos"), fs.orderBy("order", "desc")),

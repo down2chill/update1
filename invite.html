@@ -3311,7 +3311,7 @@ function lightbox(ev,i){
         ico('chev')+'</button>'+
     '</div>'+
     '<div class="lb-cap">'+img(bp.av,'')+'<b>'+h(evName(ev,bp.name,ph.byUid))+'</b><span>'+
-      h(ph.whenLabel)+'</span></div>';
+      h(ph.at?ago(ph.at):ph.whenLabel)+'</span></div>';
 }
 
 /* ================= CHAT ================= */
@@ -8211,6 +8211,9 @@ async function watchDetail(id){
       const p = d.data();
       return { id: d.id, url: p.url, thumbUrl: p.thumbUrl || p.url, byName: p.byName || "Someone",
                byAvatarUrl: p.byAvatarUrl || "", whenLabel: p.whenLabel || "",
+               /* uploads freeze whenLabel at "Just now" but order is a ms epoch -
+                  derive the real age from it, same trick as activity below */
+               at: p.at || (p.order > 1e12 ? new Date(p.order).toISOString() : ""),
                byUid: p.byUid || "", path: p.path || "" };
     })}), e => err("photos: " + e.code)));
 

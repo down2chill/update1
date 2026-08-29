@@ -1705,6 +1705,9 @@ function loadMe(){
   if(!Array.isArray(ME.linked)) ME.linked = [];
   if(!Array.isArray(ME.cloudLinked)) ME.cloudLinked = [];
   if(!ME.claims || typeof ME.claims !== 'object') ME.claims = {};
+  /* which curated guest ROW each claim took - lets two people who share a
+     full name hold separate spots on the same event */
+  if(!ME.claimRow || typeof ME.claimRow !== 'object') ME.claimRow = {};
   if(!ME.rsvp || typeof ME.rsvp !== 'object') ME.rsvp = {};
   if(typeof ME.verifiedPhone !== 'string') ME.verifiedPhone = '';
   if(typeof ME.verifyDeclined !== 'string') ME.verifyDeclined = '';
@@ -1857,7 +1860,8 @@ function saveMe(){
   var m = loadMe(), reg = regAll();
   m.at = Date.now();
   reg[m.uid] = { uid: m.uid, name: m.name, phone: m.phone, photo: m.photo, at: m.at,
-                 events: m.events, claims: m.claims, rsvp: m.rsvp, plus: m.plus };
+                 events: m.events, claims: m.claims, claimRow: m.claimRow,
+                 rsvp: m.rsvp, plus: m.plus };
   m.linked = linkedProfiles().map(function(p){ return p.uid; });
   try{
     localStorage.setItem(ME_KEY, JSON.stringify(m));
@@ -1867,7 +1871,7 @@ function saveMe(){
     D2C.saveProfile({ uid: m.uid, name: m.name, phone: normPhone(m.phone),
                       verified: phoneVerified(),
                       photo: m.photo || '', at: m.at, events: m.events, claims: m.claims,
-                      rsvp: m.rsvp, plus: m.plus })
+                      claimRow: m.claimRow, rsvp: m.rsvp, plus: m.plus })
       /* rules only answer the phone query for the number's VERIFIED owner */
       .then(function(){ return (normPhone(m.phone) && phoneVerified()) ? D2C.findByPhone(normPhone(m.phone)) : []; })
       .then(function(list){
@@ -1878,6 +1882,7 @@ function saveMe(){
             var k;
             for(k in (p.rsvp || {}))   if(!m.rsvp[k])   m.rsvp[k]   = p.rsvp[k];
             for(k in (p.claims || {})) if(!m.claims[k]) m.claims[k] = p.claims[k];
+            for(k in (p.claimRow || {})) if(!m.claimRow[k]) m.claimRow[k] = p.claimRow[k];
             for(k in (p.plus || {}))   if(!m.plus[k])   m.plus[k]   = p.plus[k];
           });
           remapRoles(); STORE.notify();
@@ -2732,15 +2737,38 @@ function guestBuckets(ev){
   /* local mode: my claim / answer only lives on this device, so fold it in.
      Live mode streams my own guests/{uid} doc, so only mark it as me. */
   if(STORE.mode === 'live'){
+    var uids = myUids(),
+        myRow = m.claimRow[ev.id] || (ev.slug && m.claimRow[ev.slug]) || '';
+    /* visitor rows with no claimOf are pre-claimRow claims: only for those
+       does a same-named typed row still fold in by name */
+    var legacyByName = {};
+    ['going','maybe','cant','waiting'].forEach(function(k){
+      b[k].forEach(function(g){
+        if(g.uid && !g.claimOf && g.name) legacyByName[k + ':' + g.name.toLowerCase()] = 1;
+      });
+    });
     ['going','maybe','cant','waiting'].forEach(function(k){
       var seen = {};
       b[k] = b[k].filter(function(g){
-        /* per-viewer - never trust a stored isYou flag */
-        g.isYou = (!!g.uid && g.uid === m.uid) ||
-                  (!!myName && g.name.toLowerCase() === myName.toLowerCase());
-        var key = g.name.toLowerCase(), first = seen[key];
+        /* per-viewer - never trust a stored isYou flag. Name matching is a
+           last resort: two guests may share a full name, so it only marks
+           the host-typed (uid-less) row and only while I claimed no row. */
+        g.isYou = (!!g.uid && uids.indexOf(g.uid) > -1) ||
+                  (!!myRow && (g.claimOf === myRow || g.docId === myRow)) ||
+                  (!myRow && !g.uid && !!myName &&
+                   g.name.toLowerCase() === myName.toLowerCase());
+        /* fold key: rows that answer for the same claimed SPOT share it, my
+           linked uids count as one person, and only claim-less legacy rows
+           still share the bare name - so two people with the same full name
+           keep separate rows once their rows carry claimOf */
+        var key = g.claimOf ? 'c:' + g.claimOf
+                : g.uid ? (uids.indexOf(g.uid) > -1 ? 'me' : 'n:' + g.name.toLowerCase())
+                : (g.docId && !legacyByName[k + ':' + g.name.toLowerCase()])
+                  ? 'c:' + g.docId
+                  : 'n:' + g.name.toLowerCase();
+        var first = seen[key];
         if(!first){ seen[key] = g; return true; }
-        /* the same person twice (the host's created row + their own
+        /* the same spot twice (the host's typed row + its claimer's own
            uid-keyed rsvp/plus doc) folds into one row */
         if(g.isHost) first.isHost = true;
         if(g.isYou) first.isYou = true;
@@ -2766,12 +2794,20 @@ function guestBuckets(ev){
     else if(my === 'cant') b.cant.unshift(meRow);
     else if(m.claims[ev.id] || myEvents().indexOf(ev.id) > -1) b.waiting.unshift(meRow);
   }
-  /* anyone who answered no longer waits under the same name */
-  var responded = {};
+  /* whoever answered no longer waits: their claimed spot leaves the pending
+     list (row-keyed); answers with no claim info fall back to the old name
+     rule so pre-claimRow claims keep collapsing */
+  var respondedRow = {}, respondedName = {};
   b.going.concat(b.maybe).concat(b.cant).forEach(function(g){
-    responded[g.name.toLowerCase()] = 1;
+    if(g.claimOf) respondedRow[g.claimOf] = 1;
+    else respondedName[g.name.toLowerCase()] = 1;
+    if(g.docId) respondedRow[g.docId] = 1;
   });
-  b.waiting = b.waiting.filter(function(g){ return !responded[g.name.toLowerCase()]; });
+  b.waiting = b.waiting.filter(function(g){
+    if(g.docId && respondedRow[g.docId]) return false;
+    return !(g.claimOf ? respondedRow[g.claimOf]
+                       : respondedName[g.name.toLowerCase()]);
+  });
   /* my own +1 renders even before (or without) the cloud write landing */
   ['going','maybe','cant'].forEach(function(k){
     b[k].forEach(function(g){ if(g.isYou && !g.plus) g.plus = myPlus(ev.id); });
@@ -2794,7 +2830,8 @@ function renderGuests(id){
     if(ev.role==='hosting')
       return g.isHost ? '' :
         '<button class="dots" type="button" data-gdots="'+h(g.name)+'" data-gduid="'+h(g.uid||'')+
-        '" data-gstat="'+h(g.status||'')+'" aria-haspopup="true" aria-expanded="false" '+
+        '" data-gdid="'+h(g.docId||'')+'" data-gstat="'+h(g.status||'')+
+        '" aria-haspopup="true" aria-expanded="false" '+
         'aria-label="Options for '+h(g.name)+'">'+ico('more')+'</button>';
     if(g.isHost || g.isYou || !g.uid) return '';
     if(!(myRsvp(ev.id) || loadMe().claims[ev.id])) return '';
@@ -3671,10 +3708,12 @@ function addManual(raw){
     if(!e) return;
     var id = 'm-' + slugId(e.name + '|' + e.phone);
     if(extraAt(d, id) > -1) return;                    // already on the list
-    /* same person via contacts AND typed by hand = one entry, not two */
+    /* same person via contacts AND typed by hand = one entry, not two. With
+       a phone the number is the identity, so a same-named SECOND person gets
+       in; without one the name check still stops accidental duplicates. */
     var pn2 = normPhone(e.phone), nm2 = e.name.toLowerCase();
     if(d.extra.some(function(x){
-      return (pn2 && normPhone(x.phone) === pn2) || x.name.toLowerCase() === nm2;
+      return pn2 ? normPhone(x.phone) === pn2 : x.name.toLowerCase() === nm2;
     })) return;
     d.extra.push({ id: id, name: e.name, phone: e.phone, photo: '', src: 'manual' });
     added++;
@@ -4367,16 +4406,25 @@ function isPublicEvent(ev){
 /* the host's curated list plus anyone added from the invite sheet later -
    the identities a visitor can claim, and the roster the invite gates check */
 function inviteePool(ev){
-  var seen = {}, out = [];
-  var push = function(g){
-    var k = (g.name || '').toLowerCase();
-    if(!k || seen[k]) return;
-    seen[k] = 1; out.push(g);
-  };
+  var seen = {}, names = {}, out = [];
+  /* live pending rows first: every doc is its own claimable spot, so two
+     invitees who share a full name both keep a row (docId is the key).
+     Rows with no visitor uid are typed-in people, whoever added them. */
+  (ev.waiting || []).forEach(function(g){
+    if(g.uid || !g.name) return;
+    var k = g.docId ? 'd:' + g.docId : 'n:' + g.name.toLowerCase();
+    if(seen[k]) return;
+    seen[k] = 1; names[g.name.toLowerCase()] = 1; out.push(g);
+  });
+  /* the doc-level copies cover local mode and the pre-stream flash; a name
+     the rows already carry is the same invite, not another person */
   ((ev.invitedGuests && ev.invitedGuests.length) ? ev.invitedGuests
-    : (ev.guestPreview || []).filter(function(g){ return !g.isHost; })).forEach(push);
-  /* pending rows with no visitor uid are typed-in people, whoever added them */
-  (ev.waiting || []).forEach(function(g){ if(!g.uid) push(g); });
+    : (ev.guestPreview || []).filter(function(g){ return !g.isHost; }))
+    .forEach(function(g){
+      var k = (g.name || '').toLowerCase();
+      if(!k || names[k]) return;
+      names[k] = 1; out.push(g);
+    });
   return out;
 }
 function claimList(ev){ return inviteePool(ev).slice(0, 12); }
@@ -4408,31 +4456,42 @@ function canJoin(ev){
   var jm = joinMode(ev);
   return ev.role === 'hosting' || jm === 'open' || jm === 'public' || amJoined(ev);
 }
-/* names already claimed by some OTHER visitor - from streamed guest rows
-   (live) and from every registry profile's claims map (local) */
-function takenNames(ev){
-  var m = loadMe(), out = {};
+/* spots already claimed by some OTHER visitor - row-keyed when the claiming
+   row says WHICH spot it took (claimOf), name-keyed as the legacy fallback.
+   Sources: streamed guest rows (live) and every registry profile (local). */
+function takenSpots(ev){
+  var m = loadMe(), uids = myUids(), rows = {}, names = {};
   [].concat(ev.guests || [], ev.maybes || [], ev.cants || [], ev.waiting || [])
     .forEach(function(g){
-      if(g.uid && /^u-/.test(g.uid) && g.uid !== m.uid && g.name) out[g.name.toLowerCase()] = 1;
+      if(!(g.uid && /^u-/.test(g.uid)) || uids.indexOf(g.uid) > -1) return;
+      if(g.claimOf) rows[g.claimOf] = 1;
+      else if(g.name) names[g.name.toLowerCase()] = 1;   /* pre-claimRow claim */
     });
   var reg = regAll(), k;
   for(k in reg){
     if(k === m.uid) continue;
+    var cr = reg[k].claimRow || {};
+    var rid = cr[ev.id] || (ev.slug && cr[ev.slug]);
+    if(rid){ rows[rid] = 1; continue; }
     var c = reg[k].claims || {};
     var nm = c[ev.id] || (ev.slug && c[ev.slug]);
-    if(nm) out[nm.toLowerCase()] = 1;
+    if(nm) names[nm.toLowerCase()] = 1;
   }
-  return out;
+  return { rows: rows, names: names };
 }
 function claimCard(ev){
-  var taken = takenNames(ev),
+  var taken = takenSpots(ev),
       /* on the gated rungs an unlisted name becomes a join request */
       needOk = joinMode(ev) === 'guests' || joinMode(ev) === 'private';
-  /* a claimed name simply is not on the menu any more */
-  var rows = claimList(ev).filter(function(g){ return !taken[g.name.toLowerCase()]; })
+  /* a claimed spot simply is not on the menu any more - a duplicate NAME
+     stays claimable as long as its own row is free */
+  var rows = claimList(ev).filter(function(g){
+      if(g.docId && taken.rows[g.docId]) return false;
+      return !taken.names[(g.name || '').toLowerCase()];
+    })
     .map(function(g){
-      return '<button class="claim-row" type="button" data-claim="' + h(g.name) + '">' +
+      return '<button class="claim-row" type="button" data-claim="' + h(g.name) +
+        '" data-claimrow="' + h(g.docId || '') + '">' +
         '<img src="' + h(g.avatarUrl || GAV) + '" alt="">' +
         '<b>' + h(g.name) + '</b>' + (g.phone ? '<span>' + h(g.phone) + '</span>' : '') +
       '</button>';
@@ -5060,11 +5119,11 @@ function eventDock(id){
       return;
     }
     var clm=t.closest('[data-claim]');
-    if(clm){ doClaim(clm.dataset.claim, false); return; }
+    if(clm){ doClaim(clm.dataset.claim, false, clm.dataset.claimrow||''); return; }
     if(t.closest('[data-claim-go]')){
       var cin=document.getElementById('claim-name'), cv=cin&&cin.value.trim();
       if(!cv){ toast('Type your name first','err'); return; }
-      doClaim(cv, true); return;
+      doClaim(cv, true, ''); return;
     }
     if(t.closest('[data-name-go]')){
       var nin=document.getElementById('claim-name'), nv=nin&&nin.value.trim();
@@ -5371,7 +5430,8 @@ function eventDock(id){
         ico('trash')+(isPerson?'Remove Guest':'Remove Invitation')+'</button>';
       menuEvent=null;
       menuGuest={ id:route().id, name:dots.dataset.gdots,
-                  uid:dots.dataset.gduid||'', status:dots.dataset.gstat||'' };
+                  uid:dots.dataset.gduid||'', docId:dots.dataset.gdid||'',
+                  status:dots.dataset.gstat||'' };
       anchor=dots; dots.setAttribute('aria-expanded','true');
       placeMenu(dots); return;
     }
@@ -5748,7 +5808,24 @@ function eventDock(id){
     var m=loadMe();
     /* remember that this uid opened this event, whoever they turn out to be */
     if(m.events.indexOf(ev.id)<0){ m.events.push(ev.id); saveMe(); }
-    if(m.name || m.claims[ev.id] || claimShown[ev.id] || ev.role==='hosting') return;
+    if(m.claims[ev.id] || claimShown[ev.id] || ev.role==='hosting') return;
+    if(m.name){
+      /* a named visitor links to their curated spot by name - silently when
+         at most one unclaimed row matches, by PICKING when several do (two
+         invitees can share a full name; the sheet then shows every row) */
+      var tk=takenSpots(ev), open=[];
+      inviteePool(ev).forEach(function(g){
+        if((g.name||'').toLowerCase()!==m.name.toLowerCase()) return;
+        if(g.docId ? tk.rows[g.docId] : tk.names[(g.name||'').toLowerCase()]) return;
+        open.push(g);
+      });
+      if(open.length<2){
+        if(open.length && open[0].docId){
+          m.claims[ev.id]=open[0].name; m.claimRow[ev.id]=open[0].docId; saveMe();
+        }
+        return;
+      }
+    }
     if(!modal.hidden) return;
     claimShown[ev.id]=1;
     modal.innerHTML=claimCard(ev); modal.hidden=false;
@@ -5785,17 +5862,27 @@ function eventDock(id){
     } else box.value='';
     var sheet=modal.querySelector('[data-invitefor]'),
         ev=sheet?findEvent(sheet.dataset.invitefor):null,
-        have={};
+        have={}, phones={};
     if(ev) [].concat(ev.guests||[],ev.maybes||[],ev.cants||[],ev.waiting||[],
                      ev.requests||[],ev.guestPreview||[])
-      .forEach(function(g){ if(g.name) have[g.name.toLowerCase()]=1; });
-    INVQ.forEach(function(p){ have[p.name.toLowerCase()]=1; });
+      .forEach(function(g){
+        if(g.name) have[g.name.toLowerCase()]=1;
+        if(g.phone) phones[normPhone(g.phone)]=1;
+      });
+    INVQ.forEach(function(p){
+      have[p.name.toLowerCase()]=1;
+      if(p.phone) phones[normPhone(p.phone)]=1;
+    });
     var added=0, dup=0;
     text.split(',').forEach(function(part){
       var p=parseEntry(part);
       if(!p) return;
-      if(have[p.name.toLowerCase()]){ dup++; return; }
-      have[p.name.toLowerCase()]=1; INVQ.push(p); added++;
+      /* a phone is the identity: a same-named second person with their own
+         number is welcome; only a bare repeated name counts as a duplicate */
+      var pk=normPhone(p.phone);
+      if(pk ? phones[pk] : have[p.name.toLowerCase()]){ dup++; return; }
+      have[p.name.toLowerCase()]=1; if(pk) phones[pk]=1;
+      INVQ.push(p); added++;
     });
     if(added) repaintInvite();
     else if(dup) toast('Already on the list','err');
@@ -5846,36 +5933,50 @@ function eventDock(id){
     }
   }
 
-  function doClaim(name, custom){
+  function doClaim(name, custom, rowId){
     var id=route().id, m=loadMe(), ev=findEvent(id);
-    if(ev && takenNames(ev)[name.toLowerCase()]){
-      toast('Sorry - '+fname(name)+' is already taken here. Pick another name.','err',4500);
+    var taken=ev?takenSpots(ev):{rows:{},names:{}};
+    /* only the exact SPOT being claimed can be taken - two invitees who
+       share a full name each keep their own claimable row */
+    if(ev && !custom && (rowId ? taken.rows[rowId] : taken.names[name.toLowerCase()])){
+      toast('Sorry - that spot was just claimed. Tap your own name or type it below.','err',4500);
       return;
     }
-    /* a typed name that matches the list IS a claim; an unlisted one on the
-       gated rungs becomes a join request for the host to approve */
+    /* a typed name that matches an UNCLAIMED listed spot IS a claim of that
+       spot; matching only claimed spots means a second person with the same
+       name - fine as a plain join, a host-approval request on gated rungs.
+       An unlisted name on the gated rungs is a join request as before. */
     if(custom && ev){
-      var listed=inviteePool(ev).filter(function(g){
-        return (g.name||'').toLowerCase()===name.toLowerCase(); })[0];
-      if(listed) name=listed.name;
+      var pool=inviteePool(ev), listed=null, i, gi;
+      for(i=0;i<pool.length && !listed;i++){
+        gi=pool[i];
+        if((gi.name||'').toLowerCase()!==name.toLowerCase()) continue;
+        if(gi.docId ? taken.rows[gi.docId] : taken.names[(gi.name||'').toLowerCase()]) continue;
+        listed=gi;
+      }
+      if(listed){ name=listed.name; rowId=listed.docId||''; }
       else if(joinMode(ev)==='guests'||joinMode(ev)==='private'){ requestJoin(ev, name); return; }
     }
     m.claims[id]=name;
+    if(rowId) m.claimRow[id]=rowId;
     if(custom || !m.name) m.name=name;
     if(!custom && ev){
+      var src=null;
       claimList(ev).forEach(function(g){
-        if(g.name===name){
-          if(g.phone && !m.phone) m.phone=g.phone;
-          /* never adopt the generic placeholder as a real photo */
-          if(g.avatarUrl && g.avatarUrl!==GAV && !m.photo) m.photo=g.avatarUrl;
-        }
+        if(src) return;
+        if(rowId ? g.docId===rowId : g.name===name) src=g;
       });
+      if(src){
+        if(src.phone && !m.phone) m.phone=src.phone;
+        /* never adopt the generic placeholder as a real photo */
+        if(src.avatarUrl && src.avatarUrl!==GAV && !m.photo) m.photo=src.avatarUrl;
+      }
     }
     if(m.events.indexOf(id)<0) m.events.push(id);
     var pr=pendingRsvp; pendingRsvp=null;
     saveMe(); closeModal();
     if(STORE.mode==='live' && window.D2C && D2C.announceGuest && !m.rsvp[id])
-      D2C.announceGuest(id).catch(function(){});
+      D2C.announceGuest(id, m.claimRow[id]||'').catch(function(){});
     toast('Welcome, '+fname(name)+'!','top');
     if(pr && pr.id===id){
       var pb=document.querySelector('#rsvp button[data-k="'+pr.k+'"]');
@@ -6574,7 +6675,8 @@ function eventDock(id){
     var ev=findEvent(mg.id); if(!ev) return;
     if(STORE.mode==='live' && window.D2C){
       toast('Removing…','wait',0);
-      (mg.uid ? D2C.banGuest(ev.id, mg.uid, mg.name, erase) : D2C.removeGuest(ev.id, mg.name))
+      (mg.uid ? D2C.banGuest(ev.id, mg.uid, mg.name, erase)
+              : D2C.removeGuest(ev.id, mg.name, mg.docId||''))
         .then(function(){
           /* an approved removal request is done with its request doc (the ban
              usually swept it already - the doc is keyed by the target's uid) */
@@ -6586,7 +6688,10 @@ function eventDock(id){
     }
     var low=(mg.name||'').toLowerCase(), cuts={going:0,maybe:0,cant:0,pending:0};
     var hit=function(g){
-      return (mg.uid && g.uid===mg.uid) || (!g.uid && (g.name||'').toLowerCase()===low);
+      /* an invitation removal with a known row hits exactly that row */
+      if(!mg.uid) return mg.docId ? g.docId===mg.docId
+                                  : (!g.uid && (g.name||'').toLowerCase()===low);
+      return g.uid===mg.uid || (!g.uid && (g.name||'').toLowerCase()===low);
     };
     [['guests','going'],['maybes','maybe'],['cants','cant'],['waiting','pending']]
       .forEach(function(p){
@@ -7156,15 +7261,23 @@ async function inviteGuests(eventId, list){
 }
 
 /* ---------------- the host withdraws an invitation ----------------
-   Pending rows are name-keyed (curated invites carry no visitor uid), so
-   every pending doc under that name goes, and the counter follows. */
-async function removeGuest(eventId, name){
+   Row-keyed when the menu knows the doc (docId): exactly that invitation
+   goes, so a same-named second invitee is never collateral. The name sweep
+   stays as the fallback for rows the UI met before docIds rode along. */
+async function removeGuest(eventId, name, docId){
   const { db, fs } = await initFirebase();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
-  const snap = await fs.getDocs(fs.query(fs.collection(evRef, "guests"),
-    fs.where("status", "==", "pending"), fs.where("name", "==", name)));
-  await Promise.all(snap.docs.map(d => fs.deleteDoc(d.ref)));
-  if(snap.size) await fs.updateDoc(evRef, { "counts.pending": fs.increment(-snap.size) });
+  let docs;
+  if(docId){
+    const one = await fs.getDoc(fs.doc(evRef, "guests", docId));
+    docs = (one.exists() && (one.data().status || "") === "pending") ? [one] : [];
+  } else {
+    const snap = await fs.getDocs(fs.query(fs.collection(evRef, "guests"),
+      fs.where("status", "==", "pending"), fs.where("name", "==", name)));
+    docs = snap.docs;
+  }
+  await Promise.all(docs.map(d => fs.deleteDoc(d.ref)));
+  if(docs.length) await fs.updateDoc(evRef, { "counts.pending": fs.increment(-docs.length) });
   logActivity(eventId, "x", "removed an invitation");
 }
 
@@ -7256,11 +7369,23 @@ async function banGuest(eventId, uid, name, erase){
     name ? fs.getDocs(fs.query(gcol, fs.where("name", "==", name)))
          : Promise.resolve({ docs: [] })
   ]);
+  /* rows this person claimed point straight at their curated source rows
+     (claimOf) - fetched by id because a rename can outdate the name query.
+     With that map, a same-named OTHER invitee's row is never collateral;
+     only claim-less legacy rows still fall back to the name sweep. */
+  const claimSrc = {};
+  byUid.docs.forEach(d => { const c = d.data().claimOf; if(c) claimSrc[c] = 1; });
+  const srcDocs = (await Promise.all(Object.keys(claimSrc).map(id =>
+    fs.getDoc(fs.doc(evRef, "guests", id)).then(s => (s.exists() ? s : null), () => null)
+  ))).filter(Boolean);
+  const hasClaim = Object.keys(claimSrc).length > 0;
   const seen = {}, dead = [];
-  byUid.docs.concat(byName.docs).forEach(d => {
+  byUid.docs.concat(srcDocs).concat(byName.docs).forEach(d => {
     if(seen[d.id]) return;
     const v = d.data();
-    if(v.uid === uid || !v.uid){ seen[d.id] = 1; dead.push(d); }  // never someone else's row
+    if(v.uid === uid || claimSrc[d.id] || (!v.uid && !hasClaim)){   // never someone else's row
+      seen[d.id] = 1; dead.push(d);
+    }
   });
   /* one refused row must not strand the rest - deletes settle one by one and
      only the rows that really went adjust the counters */
@@ -7318,14 +7443,19 @@ async function wipeGuestContent(evRef, fs, uid){
 }
 
 /* ---------------- a named viewer joins the waiting list ---------------- */
-async function announceGuest(eventId){
+async function announceGuest(eventId, claimOf){
   const { db, fs } = await initFirebase();
   const me = meIdent();
-  await fs.setDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "guests", me.fsId || "anon"), {
+  const row = {
     uid: me.fsId, name: me.name, avatarUrl: me.av, message: "",
     invitedLabel: "Viewing this event", isHost: false, isYou: false,
     status: "pending", authUid: authUid(), order: Date.now(), source: "visit"
-  }, { merge: true });
+  };
+  /* which curated spot this visitor claimed - the row-level key that lets
+     two guests share a full name without colliding */
+  if(claimOf) row.claimOf = claimOf;
+  await fs.setDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "guests", me.fsId || "anon"),
+    row, { merge: true });
   logActivity(eventId, "person", "joined the guest list");
 }
 
@@ -7350,12 +7480,17 @@ async function setRsvp(eventId, status, prev, wasReq){
   const { db, fs } = await initFirebase();
   const me = meIdent();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
-  await fs.setDoc(fs.doc(evRef, "guests", me.fsId || "anon"), {
+  const row = {
     uid: me.fsId, name: me.name, avatarUrl: me.av, message: "",
     invitedLabel: "Responded just now", isHost: false, isYou: false, authUid: authUid(),
     status: status, order: Date.now(), source: "rsvp",
     plus: (window.loadMe && loadMe().plus[eventId]) || 0
-  }, { merge: true });
+  };
+  /* keep the claimed-spot key on answers too (merge preserves an earlier
+     stamp; this covers an RSVP that lands before/without announceGuest) */
+  const claimOf = (window.loadMe && (loadMe().claimRow || {})[eventId]) || "";
+  if(claimOf) row.claimOf = claimOf;
+  await fs.setDoc(fs.doc(evRef, "guests", me.fsId || "anon"), row, { merge: true });
   const inc = {};
   inc["counts." + status] = fs.increment(1);
   if(prev && prev !== status) inc["counts." + prev] = fs.increment(-1);
@@ -7525,7 +7660,7 @@ function mapGuest(g, id){
   return { name: g.name || "Guest", avatarUrl: g.avatarUrl || "", message: g.message || "",
            invitedLabel: g.invitedLabel || "", isHost: !!g.isHost, isYou: !!g.isYou,
            status: g.status || "going", uid: g.uid || "", source: g.source || "",
-           phone: g.phone || "", plus: g.plus || 0,
+           phone: g.phone || "", plus: g.plus || 0, claimOf: g.claimOf || "",
            docId: id || "", reqType: g.reqType || "", byName: g.byName || "",
            targetUid: g.targetUid || "", targetName: g.targetName || "" };
 }

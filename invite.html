@@ -1411,7 +1411,9 @@ var SEED_PEOPLE = [
 var PERSON = {};
 SEED_PEOPLE.forEach(function(p){ PERSON[p.id]=p; });
 function pn(id){ var p=PERSON[id]; return p?p.name:'Unknown'; }
-function pf(id){ return pn(id).split(' ')[0]; }
+function nfl(n){ var p=String(n||'').trim().split(/\s+/);
+  return p.length<2 ? (p[0]||'') : p[0]+' '+p[p.length-1].charAt(0).toUpperCase()+'.'; }
+function pf(id){ return nfl(pn(id)); }
 function pav(id){ var p=PERSON[id]; return p?AV(p.avatar):GAV; }
 
 var VIOLET='#6d28d9', BLUE='#2563eb', GREEN='#16a34a', ORANGE='#f97316';
@@ -1442,7 +1444,7 @@ var SEED_EVENTS = [
       {id:"ryan",   ic:'check', ok:1, txt:'is Going',                    t:'2 minutes ago'},
       {id:"emily",  ic:'cam',        txt:'added 4 photos',               t:'18 minutes ago'},
       {id:"jacob",  ic:'chat',       txt:'\u201CI\u2019ll bring drinks.\u201D', t:'42 minutes ago', quote:1},
-      {id:"ashley", ic:'users',      txt:'invited Megan',                t:'1 hour ago'},
+      {id:"ashley", ic:'users',      txt:'invited Megan D.',                t:'1 hour ago'},
       {id:"tylerb", ic:'check', ok:1,txt:'is Going',                     t:'Yesterday'},
       {id:"sophiem",ic:'cam',        txt:'added a photo',                t:'Yesterday'},
       {id:"emily",  ic:'pen',        txt:'updated the event description',t:'2 days ago'}
@@ -1467,20 +1469,20 @@ var SEED_EVENTS = [
     photos:['sb1','sb2','sb3','sb4'], photoCount:6, photoWhen:'yesterday',
     guests:[
       {id:"andrew", msg:'Coffee is on me \u2615', when:'Created this event', host:true},
-      {id:"megan",  msg:'Finally a break.', when:'Invited 2 days ago by Andrew'},
-      {id:"jacob",  msg:'I\u2019ll bring cards.', when:'Invited 2 days ago by Andrew'},
-      {id:"lily",   msg:'Count me in.', when:'Invited 3 days ago by Andrew'}
+      {id:"megan",  msg:'Finally a break.', when:'Invited 2 days ago by Andrew O.'},
+      {id:"jacob",  msg:'I\u2019ll bring cards.', when:'Invited 2 days ago by Andrew O.'},
+      {id:"lily",   msg:'Count me in.', when:'Invited 3 days ago by Andrew O.'}
     ],
     waiting:[
-      {id:"priya",  when:'Invited yesterday by Andrew'},
-      {id:"noah",   when:'Invited 2 days ago by Andrew'},
-      {id:"chloe",  when:'Invited 4 days ago by Andrew'}
+      {id:"priya",  when:'Invited yesterday by Andrew O.'},
+      {id:"noah",   when:'Invited 2 days ago by Andrew O.'},
+      {id:"chloe",  when:'Invited 4 days ago by Andrew O.'}
     ],
     activity:[
       {id:"megan", ic:'check', ok:1, txt:'is Going',            t:'3 hours ago'},
       {id:"andrew",ic:'pen',        txt:'moved the start time', t:'Yesterday'},
       {id:"lily",  ic:'check', ok:1,txt:'is Going',             t:'Yesterday'},
-      {id:"andrew",ic:'users',      txt:'invited Priya',        t:'2 days ago'}
+      {id:"andrew",ic:'users',      txt:'invited Priya R.',        t:'2 days ago'}
     ]
   },
   {
@@ -1494,21 +1496,21 @@ var SEED_EVENTS = [
     photos:['rm1','rm2','rm3','rm4'], photoCount:11, photoWhen:'3 days ago',
     guests:[
       {id:"jillian", msg:'Rooftop is booked \uD83C\uDF89', when:'Created this event', host:true},
-      {id:"marcus",  msg:'Bringing the projector.', when:'Invited 3 days ago by Jillian'},
-      {id:"chloe",   msg:'Snack duty accepted.',    when:'Invited 3 days ago by Jillian'},
-      {id:"ryan",    msg:'Saving a beanbag.',       when:'Invited 5 days ago by Jillian'}
+      {id:"marcus",  msg:'Bringing the projector.', when:'Invited 3 days ago by Jillian P.'},
+      {id:"chloe",   msg:'Snack duty accepted.',    when:'Invited 3 days ago by Jillian P.'},
+      {id:"ryan",    msg:'Saving a beanbag.',       when:'Invited 5 days ago by Jillian P.'}
     ],
     waiting:[
-      {id:"sophiem", when:'Invited yesterday by Jillian'},
-      {id:"daniel",  when:'Invited 3 days ago by Jillian'},
-      {id:"lily",    when:'Invited 4 days ago by Jillian'},
-      {id:"noah",    when:'Invited 6 days ago by Jillian'}
+      {id:"sophiem", when:'Invited yesterday by Jillian P.'},
+      {id:"daniel",  when:'Invited 3 days ago by Jillian P.'},
+      {id:"lily",    when:'Invited 4 days ago by Jillian P.'},
+      {id:"noah",    when:'Invited 6 days ago by Jillian P.'}
     ],
     activity:[
       {id:"marcus", ic:'check', ok:1, txt:'is Going',              t:'20 minutes ago'},
       {id:"jillian",ic:'cam',        txt:'added 3 photos',         t:'3 days ago'},
       {id:"chloe",  ic:'chat',       txt:'\u201CI\u2019ve got popcorn.\u201D', t:'4 days ago', quote:1},
-      {id:"jillian",ic:'users',      txt:'invited Sophie Moore',   t:'5 days ago'}
+      {id:"jillian",ic:'users',      txt:'invited Sophie M.',   t:'5 days ago'}
     ]
   },
 
@@ -2186,7 +2188,7 @@ function h(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
 function ico(id,cls){ return '<svg class="i'+(cls?' '+cls:'')+'"><use href="#'+id+'"/></svg>'; }
 function img(url,alt,cls){ return '<img'+(cls?' class="'+cls+'"':'')+' src="'+h(url||'')+'" alt="'+
   h(alt||'')+'" loading="lazy" decoding="async">'; }
-function fname(n){ return String(n||'').split(' ')[0]; }
+function fname(n){ return nfl(n); }
 var _toastT=null;
 function toast(msg,kind,ms){
   var el=document.getElementById('toast'); if(!el) return;

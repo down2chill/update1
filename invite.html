@@ -1392,35 +1392,75 @@ function letterAvatar(name, uid){
     'font-weight="700" fill="#fff">'+ch+'</text>'+
     '</svg>');
 }
-/* default event cover - night-sky scene in the app palette, used at render
-   time wherever a created event has no photo (the model keeps coverUrl "") */
-var DEF_COVER = 'data:image/svg+xml,'+encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 600">'+
-  '<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">'+
-  '<stop offset="0" stop-color="#7d8ffb"/><stop offset=".45" stop-color="#a9b6fc"/>'+
-  '<stop offset=".78" stop-color="#d7ddfd"/><stop offset="1" stop-color="#eef0fc"/></linearGradient>'+
-  '<radialGradient id="g"><stop offset="0" stop-color="#fffdf0" stop-opacity=".85"/>'+
-  '<stop offset="1" stop-color="#fffdf0" stop-opacity="0"/></radialGradient></defs>'+
-  '<rect width="480" height="600" fill="url(#s)"/>'+
-  '<g fill="#fff"><circle cx="60" cy="150" r="2.4"/><circle cx="150" cy="70" r="1.8"/>'+
-  '<circle cx="205" cy="180" r="2.2" opacity=".8"/><circle cx="280" cy="60" r="1.7"/>'+
-  '<circle cx="255" cy="130" r="1.5" opacity=".7"/><circle cx="430" cy="230" r="2"/>'+
-  '<circle cx="90" cy="260" r="1.8" opacity=".7"/><circle cx="330" cy="250" r="1.6" opacity=".8"/>'+
-  '<circle cx="450" cy="60" r="1.6" opacity=".6"/><circle cx="35" cy="60" r="1.7" opacity=".8"/></g>'+
-  '<circle cx="368" cy="128" r="62" fill="url(#g)"/><circle cx="368" cy="128" r="33" fill="#fdfbf3"/>'+
-  '<circle cx="355" cy="119" r="6" fill="#e9e5d5" opacity=".55"/>'+
-  '<circle cx="379" cy="138" r="4" fill="#e9e5d5" opacity=".4"/>'+
-  '<path d="M-6 84 Q120 128 240 96 Q360 68 486 108" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="3"/>'+
-  '<path d="M52 102 l9 22 9-19Z" fill="#ffd479"/><path d="M128 116 l9 22 9-20Z" fill="#fca5b8"/>'+
-  '<path d="M206 102 l9 22 9-21Z" fill="#8ce3b0"/><path d="M282 84 l9 22 9-20Z" fill="#bfdbfe"/>'+
-  '<path d="M368 84 l9 22 9-19Z" fill="#ffd479"/>'+
-  '<path d="M0 428 Q130 344 264 406 Q380 456 480 388 V600 H0 Z" fill="#b6c0fc"/>'+
-  '<path d="M0 478 Q160 406 322 466 Q420 500 480 448 V600 H0 Z" fill="#93a2fa"/>'+
-  '<path d="M226 388 v-24 l28 8 -28 8" fill="#f7b733"/>'+
-  '<path d="M226 388 l36 62 h-72 Z" fill="#4038f0"/>'+
-  '<path d="M226 388 l12 62 h-24 Z" fill="#dfe3ff"/>'+
-  '<path d="M0 528 Q150 474 306 520 Q410 550 480 508 V600 H0 Z" fill="#7683f2"/>'+
-  '</svg>');
+/* generative default cover - the same meadow-scene family, but the palette,
+   sky, stars, bunting, moon, hills and tent are all seeded off the EVENT ID:
+   coverless events each get their own stable artwork, identical on every
+   device and for every viewer, with nothing stored (coverUrl stays "") */
+var COV_PAL = [
+  { sky:['#7d8ffb','#a9b6fc','#d7ddfd','#eef0fc'], hills:['#b6c0fc','#93a2fa','#7683f2'] },  /* dusk indigo */
+  { sky:['#f6a06b','#f9c096','#fde3cb','#fdf4ea'], hills:['#f8b48c','#f2937e','#e8756f'] },  /* sunset peach */
+  { sky:['#63cfae','#8fdfc7','#c9f0e1','#effaf5'], hills:['#a3e5cf','#72d1b4','#4fbb96'] },  /* mint dusk */
+  { sky:['#b28af5','#cbadf8','#e7dbfc','#f6f1fd'], hills:['#d2b7f9','#b794f6','#9a71ef'] },  /* lavender */
+  { sky:['#5b66e9','#7d8ffb','#b3bdfc','#dfe3fd'], hills:['#8a95f7','#6f7cf3','#5561ee'] },  /* deep night */
+  { sky:['#f584b1','#f8a9c7','#fbd7e5','#fdf0f6'], hills:['#f9b0cc','#f28ab2','#e5699b'] }   /* rose */
+];
+var COV_ACC  = ['#ffd479','#fca5b8','#8ce3b0','#bfdbfe','#f7b733'];
+var COV_TENT = ['#4038f0','#6d28d9','#0f766e','#c2417e'];
+var COV_MEMO = {};
+function defCover(id){
+  var key = String(id || '');
+  if(COV_MEMO[key]) return COV_MEMO[key];
+  /* fnv-1a of the id feeds an lcg - the whole scene flows from this stream */
+  var h = 2166136261, i;
+  for(i = 0; i < key.length; i++){ h ^= key.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  function R(){ h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; }
+  function riv(a, b){ return Math.round(a + R() * (b - a)); }
+  var P = COV_PAL[Math.floor(R() * COV_PAL.length)];
+  var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 600">'+
+    '<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">'+
+    '<stop offset="0" stop-color="'+P.sky[0]+'"/><stop offset=".45" stop-color="'+P.sky[1]+'"/>'+
+    '<stop offset=".78" stop-color="'+P.sky[2]+'"/><stop offset="1" stop-color="'+P.sky[3]+'"/></linearGradient>'+
+    '<radialGradient id="g"><stop offset="0" stop-color="#fffdf0" stop-opacity=".85"/>'+
+    '<stop offset="1" stop-color="#fffdf0" stop-opacity="0"/></radialGradient></defs>'+
+    '<rect width="480" height="600" fill="url(#s)"/>';
+  var n = riv(8, 13);
+  s += '<g fill="#fff">';
+  for(i = 0; i < n; i++)
+    s += '<circle cx="'+riv(12, 468)+'" cy="'+riv(28, 310)+'" r="'+(riv(13, 26) / 10)+'"'+
+         (R() < .55 ? ' opacity=".'+riv(5, 8)+'"' : '')+'/>';
+  s += '</g>';
+  var mx = R() < .5 ? riv(76, 150) : riv(330, 406), my = riv(92, 168), mr = riv(27, 38);
+  s += '<circle cx="'+mx+'" cy="'+my+'" r="'+Math.round(mr * 1.9)+'" fill="url(#g)"/>'+
+       '<circle cx="'+mx+'" cy="'+my+'" r="'+mr+'" fill="#fdfbf3"/>'+
+       '<circle cx="'+(mx - riv(8, 15))+'" cy="'+(my - riv(5, 12))+'" r="'+riv(4, 7)+'" fill="#e9e5d5" opacity=".55"/>'+
+       '<circle cx="'+(mx + riv(6, 13))+'" cy="'+(my + riv(4, 11))+'" r="'+riv(3, 5)+'" fill="#e9e5d5" opacity=".4"/>';
+  /* bunting: one seeded curve, pennants hang along it */
+  var ay = riv(70, 116), by = ay + (R() < .5 ? -1 : 1) * riv(26, 58), ey = riv(70, 116);
+  s += '<path d="M-6 '+ay+' Q240 '+by+' 486 '+ey+'" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="3"/>';
+  var fn = riv(4, 6), t0 = .1 + R() * .06, step = (.84 - t0) / (fn - 1), c0 = riv(0, COV_ACC.length - 1);
+  for(i = 0; i < fn; i++){
+    var t = t0 + step * i + (R() - .5) * .03, u = 1 - t;
+    var fx = Math.round(u*u*-6 + 2*u*t*240 + t*t*486);
+    var fy = Math.round(u*u*ay + 2*u*t*by + t*t*ey);
+    s += '<path d="M'+fx+' '+fy+' l9 '+riv(19, 23)+' 9-'+riv(18, 21)+'Z" fill="'+COV_ACC[(c0 + i) % COV_ACC.length]+'"/>';
+  }
+  /* three hill layers share one seeded flow direction; the tent sits between
+     the middle and front layers, like the original scene */
+  var dir = R() < .5 ? 1 : -1;
+  function hill(y0, col){
+    return '<path d="M0 '+y0+' Q130 '+(y0 - riv(50, 90) * dir)+' 264 '+(y0 + riv(-26, 10) * dir)+
+      ' Q380 '+(y0 + riv(24, 54) * dir)+' 480 '+(y0 - riv(18, 48) * dir)+' V600 H0 Z" fill="'+col+'"/>';
+  }
+  s += hill(riv(400, 446), P.hills[0]) + hill(riv(456, 492), P.hills[1]);
+  var tx = riv(96, 344), ty = riv(382, 412), ts = riv(80, 120) / 100;
+  s += '<g transform="translate('+tx+' '+ty+') scale('+ts+')">'+
+    '<path d="M0 0 v-24 l28 8 -28 8" fill="#f7b733"/>'+
+    '<path d="M0 0 l36 62 h-72 Z" fill="'+COV_TENT[Math.floor(R() * COV_TENT.length)]+'"/>'+
+    '<path d="M0 0 l12 62 h-24 Z" fill="#eef0fb"/></g>';
+  s += hill(riv(506, 538), P.hills[2]) + '</svg>';
+  return (COV_MEMO[key] = 'data:image/svg+xml,' + encodeURIComponent(s));
+}
+var DEF_COVER = defCover('');
 
 /* stand-in for events with no map image (live-created ones never get one) -
    a quiet street grid so the pin and venue label sit on something map-like */
@@ -2479,7 +2519,7 @@ function statusPill(ev){
 function eventCard(ev){
   var dp=dparts(ev.dateISO);
   return '<a class="ecard" href="#event/'+ev.id+'" data-nav>'+
-    img(ev.thumbUrl||DEF_COVER, ev.title, 'thumb')+
+    img(ev.thumbUrl||defCover(ev.id), ev.title, 'thumb')+
     '<span class="emore" data-evmenu="'+ev.id+'" role="button" tabindex="0" aria-haspopup="true" '+
       'aria-expanded="false" aria-label="Options for '+h(ev.title)+'">'+ico('more')+'</span>'+
     '<div class="ebody">'+
@@ -2660,7 +2700,7 @@ function calBody(){
       return img(evProf(ev,g.uid,g.name,g.avatarUrl).av,''); }).join('');
     var extra=Math.max(0, goingTotal(ev)-3);
     return '<a class="drow" href="#event/'+ev.id+'" data-nav>'+
-      img(ev.thumbUrl||DEF_COVER,'')+
+      img(ev.thumbUrl||defCover(ev.id),'')+
       '<div class="dinfo">'+
         '<div class="dtime"><i style="background:'+ev.dot+'"></i>'+h(ev.time)+'</div>'+
         '<h4>'+h(ev.title)+'</h4>'+
@@ -2801,7 +2841,7 @@ function renderEvent(id){
     '</header>'+
     '<h1 class="title">'+h(ev.title)+'</h1>'+
     '<div class="grid"><div class="colA">'+
-      img(ev.coverUrl||DEF_COVER, ev.title, 'hero')+
+      img(ev.coverUrl||defCover(ev.id), ev.title, 'hero')+
       '<div class="meta">'+
         '<div class="host">'+(function(){ var hp=evProf(ev,ev.hostUid,ev.hostName,ev.hostAvatarUrl);
           return img(hp.av,'')+

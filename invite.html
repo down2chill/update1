@@ -1362,6 +1362,25 @@ var GAV = 'data:image/svg+xml,'+encodeURIComponent(
   '<circle cx="70" cy="53" r="23" fill="none" stroke="#9ca3af" stroke-width="9"/>'+
   '<path d="M26 121a44 44 0 0 1 88 0" fill="none" stroke="#9ca3af" stroke-width="9" stroke-linecap="round"/>'+
   '</svg>');
+/* named-but-photoless profiles: their first initial on one of five colors.
+   The color hashes off the uid - random across users, stable for one, and
+   never stored anywhere: a real photo always wins, no name keeps GAV. */
+var AV_COLORS = ['#4a41f5', '#6d28d9', '#2563eb', '#16a34a', '#f97316'];
+function letterAvatar(name, uid){
+  var first = String(name || '').trim().split(/\s+/)[0] || '';
+  if(!first) return '';
+  var ch = String.fromCodePoint(first.codePointAt(0)).toUpperCase()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  var hh = 0, s = String(uid || '');
+  for(var i = 0; i < s.length; i++) hh = (hh * 31 + s.charCodeAt(i)) | 0;
+  return 'data:image/svg+xml,'+encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140">'+
+    '<rect width="140" height="140" fill="'+AV_COLORS[Math.abs(hh) % AV_COLORS.length]+'"/>'+
+    '<text x="70" y="70" dy=".36em" text-anchor="middle" '+
+    'font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="72" '+
+    'font-weight="700" fill="#fff">'+ch+'</text>'+
+    '</svg>');
+}
 /* default event cover - night-sky scene in the app palette, used at render
    time wherever a created event has no photo (the model keeps coverUrl "") */
 var DEF_COVER = 'data:image/svg+xml,'+encodeURIComponent(
@@ -1768,7 +1787,7 @@ function refreshMe(){
     }
   }catch(e){}
 }
-function meAvatar(){ var m = loadMe(); return m.photo || GAV; }
+function meAvatar(){ var m = loadMe(); return m.photo || letterAvatar(m.name, m.uid) || GAV; }
 function normPhone(p){ return String(p || '').replace(/\D/g, '').slice(-10); }
 /* Firebase wants E.164 ("+15550123456") - a bare 10-digit number is assumed US */
 function toE164(p){
@@ -3883,7 +3902,7 @@ function hashStr(s){
   for(i = 0; i < s.length; i++) hOut = (hOut * 31 + s.charCodeAt(i)) | 0;
   return hOut;
 }
-function faceOf(p){ return p.photo || GAV; }
+function faceOf(p){ return p.photo || letterAvatar(p.name, p.uid) || GAV; }
 function extraAt(d, id){
   for(var i = 0; i < d.extra.length; i++) if(d.extra[i].id === id) return i;
   return -1;
@@ -6287,8 +6306,10 @@ function eventDock(id){
       });
       if(src){
         if(src.phone && !m.phone) m.phone=src.phone;
-        /* never adopt the generic placeholder as a real photo */
-        if(src.avatarUrl && src.avatarUrl!==GAV && !m.photo) m.photo=src.avatarUrl;
+        /* never adopt a generated stand-in (grey person, letter tile) as a
+           real photo - those are data-URI svgs; real photos never are */
+        if(src.avatarUrl && src.avatarUrl.indexOf('data:image/svg')!==0 && !m.photo)
+          m.photo=src.avatarUrl;
       }
     }
     if(m.events.indexOf(id)<0) m.events.push(id);

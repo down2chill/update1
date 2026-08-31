@@ -5028,14 +5028,22 @@ function eventDock(id){
        that out like the claim sheets do, or its confirmFn dies mid-decision */
     if(curKeyChanged || !modal.querySelector('.claim, [data-confirm-yes]')) closeModal();
     /* an event a banned viewer opens (or one that was deleted) is simply gone -
-       never a dead end. Mid-view (the stream just dropped it, i.e. the host
-       removed them) they land straight back on Home; arriving fresh at a dead
-       link lands on Home under an "unavailable" notice. */
+       never a dead end. Both a dead link AND a mid-view eviction (the stream
+       just dropped it, i.e. the host removed them or deleted the event) land
+       on Home under the "unavailable" notice - the evicted page must never
+       stay open looking live. */
     var isDetail=(r.v==='event'||r.v==='guests'||r.v==='photos'||r.v==='chat'),
         dEv=isDetail ? findEvent(r.id) : null,
         gone=isDetail && !dEv, goneNote=false;
+    /* live mode: a missing event only counts as gone once its own watcher
+       said so (denied = removed by the host, !exists = deleted) or it is
+       sitting in the store banned-filtered - otherwise it just hasn't
+       streamed yet, so hold the loading view */
+    if(gone && STORE.mode==='live' && !(window.EV_GONE||{})[r.id] && !STORE.byId[r.id]){
+      app.innerHTML=loadingView(); chrome.innerHTML=''; return;
+    }
     if(gone){
-      goneNote=lastEvId!==r.id;
+      goneNote=true;
       lastEvId=null;
       closeModal();
       history.replaceState({d:0},'','#home');
@@ -8037,6 +8045,11 @@ function smsAbort(){
 let unsubDetail = [], watchingId = null;
 let unsubPub = null, unsubHost = null, idWatch = {};
 const SRC = { pub: {}, host: {}, id: {} };
+/* definitive per-id verdicts from the id-watchers: 1 = this viewer can no
+   longer read the event (banned, or it was deleted). The renderer only
+   evicts on a verdict - a merely not-yet-streamed event holds the loading
+   view instead of flashing a false "unavailable". */
+const EV_GONE = window.EV_GONE = {};
 let rebuildT = null;
 
 function scheduleRebuild(){
@@ -8061,6 +8074,18 @@ function applySnap(kind, snap){
   SRC[kind] = now;
   scheduleRebuild();
 }
+/* an id-watch erroring means the doc became unreadable for THIS viewer -
+   the host banned them (bannedAuth now includes their uid, so the rules
+   cancel the listener) or the event is gone. Drop it from the store at
+   once: the repaint lands them on Home with the "unavailable" notice
+   instead of leaving a live-looking page they can no longer touch. */
+function dropWatched(id, code){
+  dim("event " + id + ": " + code);
+  EV_GONE[id] = 1;
+  delete idWatch[id];
+  delete SRC.id[id];
+  scheduleRebuild();
+}
 /* one listener per event I belong to - never the whole collection */
 function watchMine(){
   if(!fb || !window.myEvents) return;
@@ -8071,23 +8096,27 @@ function watchMine(){
   Object.keys(want).forEach(id => {
     if(idWatch[id] || !/^[A-Za-z0-9_-]{1,80}$/.test(id)) return;
     idWatch[id] = fs.onSnapshot(fs.doc(db, ...FS_ROOT, "events", id),
-      s => { if(s.exists()) SRC.id[s.id] = s.data(); else delete SRC.id[s.id];
+      s => { if(s.exists()){ SRC.id[s.id] = s.data(); delete EV_GONE[s.id]; }
+             else { delete SRC.id[s.id]; EV_GONE[s.id] = 1; }
              scheduleRebuild(); },
-      e => { dim("event " + id + ": " + e.code); });   /* gone or banned: not visible */
+      e => dropWatched(id, e.code));
   });
 }
-/* a direct link to an event none of the streams carry - fetch just that doc */
+/* a direct link to an event none of the streams carry - fetch just that doc.
+   SRC.id presence alone doesn't skip: after a reconnect the entry may be a
+   leftover with no live listener behind it. */
 async function ensureEvent(id){
   if(!KEY_OK) return;
-  if(SRC.id[id] || SRC.pub[id] || SRC.host[id] || idWatch[id]) return;
+  if(SRC.pub[id] || SRC.host[id] || idWatch[id]) return;
   if(!/^[A-Za-z0-9_-]{1,80}$/.test(id)) return;
   try {
     const { db, fs } = await initFirebase();
     if(idWatch[id]) return;
     idWatch[id] = fs.onSnapshot(fs.doc(db, ...FS_ROOT, "events", id),
-      s => { if(s.exists()) SRC.id[s.id] = s.data(); else delete SRC.id[s.id];
+      s => { if(s.exists()){ SRC.id[s.id] = s.data(); delete EV_GONE[s.id]; }
+             else { delete SRC.id[s.id]; EV_GONE[s.id] = 1; }
              scheduleRebuild(); },
-      e => { dim("event " + id + ": " + e.code); });
+      e => dropWatched(id, e.code));
   } catch(e){}
 }
 
@@ -8101,7 +8130,9 @@ async function connectLive(){
   [unsubPub, unsubHost].forEach(u => { if(u){ try{ u(); }catch(e){} } });
   unsubPub = unsubHost = null;
   Object.keys(idWatch).forEach(k => { try{ idWatch[k](); }catch(e){} delete idWatch[k]; });
-  SRC.pub = {}; SRC.host = {}; SRC.id = {};
+  /* keep the old SRC maps until fresh snapshots replace each source - a
+     reconnect that cleared them flashed an empty store, which now reads as
+     "your event is gone" to anyone mid-view */
   try {
     const { db, fs, uid } = await initFirebase();
     // Public events from the last ~6 weeks onward (needs the composite

@@ -1930,11 +1930,11 @@ function hydrateProfile(doc){
   for(k in (doc.claims || {}))   if(!m.claims[k])   m.claims[k]   = doc.claims[k];
   for(k in (doc.claimRow || {})) if(!m.claimRow[k]) m.claimRow[k] = doc.claimRow[k];
   for(k in (doc.plus || {}))     if(!m.plus[k])     m.plus[k]     = doc.plus[k];
-  if((doc.at || 0) > (m.at || 0)){
-    if(doc.name  && !ME_DIRTY.name)  m.name  = doc.name;
-    if(doc.photo && !ME_DIRTY.photo) m.photo = doc.photo;
-    if(doc.phone && !ME_DIRTY.phone && !m.phone) m.phone = doc.phone;
-  }
+  /* server fields FILL local blanks unconditionally; they only OVERWRITE
+     when the server copy is newer - a blank local profile must always heal */
+  if(doc.name  && !ME_DIRTY.name  && (!m.name  || (doc.at || 0) > (m.at || 0))) m.name  = doc.name;
+  if(doc.photo && !ME_DIRTY.photo && (!m.photo || (doc.at || 0) > (m.at || 0))) m.photo = doc.photo;
+  if(doc.phone && !ME_DIRTY.phone && !m.phone) m.phone = doc.phone;
   saveMe(); remapRoles(); STORE.notify(); repaintMe();
 }
 /* another tab or a bfcache-restored page may hold a STALE in-memory profile;
@@ -5514,6 +5514,9 @@ function eventDock(id){
            row, stamp, and message this identity holds - no RSVP needed */
         propagateMe(); repaintMe(); remapRoles(); STORE.notify();
         afterAuthClaim();
+        /* a second pass after the late profile heal, in case the first
+           propagation ran before the account's record finished syncing */
+        setTimeout(function(){ propagateMe(); repaintMe(); STORE.notify(); }, 2600);
       }).catch(function(e){
         if(SW.kind!=='google' && e && e.code==='auth/requires-recent-code'){
           /* the one-time code was spent proving the number - text a fresh one
@@ -6024,15 +6027,21 @@ function eventDock(id){
   function afterAuthClaim(){
     var c=GCTX; GCTX=null;
     if(!c || !c.claim || Date.now()-c.at>300000) return;
-    var ev=findEvent(c.id);
-    if(route().id!==c.id || !ev) return;
-    pendingRsvp=c.pr||null;
-    var m=loadMe();
-    if(m.name) doClaim(m.name, true, '');
-    else {
-      modal.innerHTML=claimCard(ev); modal.hidden=false;
-      document.body.classList.add('modal-open'); modalShown();
-    }
+    var tries=0;
+    (function fin(){
+      var ev=findEvent(c.id);
+      if(route().id!==c.id || !ev) return;
+      var m=loadMe();
+      /* the account's name may still be syncing in (auth-race heal) - give
+         it a few seconds before falling back to asking again */
+      if(!m.name && tries++<10){ setTimeout(fin, 500); return; }
+      pendingRsvp=c.pr||null;
+      if(m.name) doClaim(m.name, true, '');
+      else {
+        modal.innerHTML=claimCard(ev); modal.hidden=false;
+        document.body.classList.add('modal-open'); modalShown();
+      }
+    })();
   }
   /* the code matched. Three outcomes, all server-decided:
        linked   - the claim landed on THIS account (same uid, upgraded in place)
@@ -7990,8 +7999,12 @@ async function saveProfile(p){
   const { db, fs } = await initFirebase();
   const uid = authUid();
   if(!uid || p.uid !== uid) return;   /* never write under an id the server didn't mint */
-  await fs.setDoc(fs.doc(db, ...FS_ROOT, "people", uid),
-    Object.assign({}, p, { updatedAt: fs.serverTimestamp() }), { merge: true });
+  const clean = Object.assign({}, p, { updatedAt: fs.serverTimestamp() });
+  /* a merge write must never BLANK what this account already has - a fresh
+     device saving before it has hydrated carries empty fields, and letting
+     those land wiped the account's own name/photo (live incident) */
+  ["name", "photo", "phone"].forEach(k => { if(!clean[k]) delete clean[k]; });
+  await fs.setDoc(fs.doc(db, ...FS_ROOT, "people", uid), clean, { merge: true });
 }
 
 /* ---------------- 7. SMS phone check (Firebase Phone Auth) ----------------
@@ -8118,22 +8131,34 @@ async function doSwitch(cred, kind){
   /* READ the account's record BEFORE anything can write under its uid -
      adoptAuthUid triggers a profile save, and doing that first merge-wrote
      the guest's (often blank) name and photo over the account's own,
-     which then read back as "nothing to adopt" */
+     which then read back as "nothing to adopt".
+     The read RETRIES: the Firestore SDK adopts a changed auth user
+     asynchronously, so the first request after signInWithCredential can
+     still go out with the old token and come back permission-denied. */
+  try { await user.getIdToken(); } catch(e){}
   let doc = null;
-  try {
-    const snap = await fs.getDoc(fs.doc(db, ...FS_ROOT, "people", user.uid));
-    if(snap.exists()) doc = snap.data();
-  } catch(e){}
+  for(let t = 0; t < 5; t++){
+    try {
+      const snap = await fs.getDoc(fs.doc(db, ...FS_ROOT, "people", user.uid));
+      if(snap.exists()) doc = snap.data();
+      break;                       /* the read ran as the new user */
+    } catch(e){                    /* denied = old token still in play */
+      await new Promise(r => setTimeout(r, 200 + 300 * t));
+    }
+  }
   /* merge locally while ME still holds the old uid (cloud writes are
      uid-guarded, so nothing lands upstream yet): the account's own name
-     and photo win; Google's fill any remaining blanks; the guest's event
-     list unions in */
+     and photo win; Google's fill any remaining blanks (the top-level
+     displayName is usually null - the google.com providerData entry is
+     where the real name and face live); the guest's event list unions in */
   if(window.hydrateProfile && doc) hydrateProfile(doc);
+  const gp = (user.providerData || []).filter(
+    pd => pd && pd.providerId === "google.com")[0] || {};
   let name = "", photo = "";
   if(window.loadMe){
     const m2 = loadMe();
-    m2.name  = (doc && doc.name)  || m2.name  || user.displayName || "";
-    m2.photo = (doc && doc.photo) || m2.photo || user.photoURL    || "";
+    m2.name  = (doc && doc.name)  || m2.name  || user.displayName || gp.displayName || "";
+    m2.photo = (doc && doc.photo) || m2.photo || user.photoURL    || gp.photoURL    || "";
     name = m2.name; photo = m2.photo;
   }
   /* NOW adopt the identity - the save this fires carries the merged
@@ -8157,6 +8182,9 @@ async function doSwitch(cred, kind){
     fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", id),
       { hostAuthUid: user.uid, hostUid: user.uid }).catch(() => {})));
   connectLive();   /* re-stream under the new principal */
+  /* late heal: if the record read above lost the auth race after all, this
+     second pull lands once the SDK has settled and fills any blanks */
+  setTimeout(() => { pullProfile().catch(() => {}); }, 1600);
   return { name: name };
 }
 /* remove the reCAPTCHA widget + badge; any sent code stays confirmable */
@@ -8180,14 +8208,22 @@ async function googleAuth(){
   if(!user) throw { code: "auth/network-request-failed", message: "not signed in yet" };
   const provider = new au.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
+  /* linking does NOT copy the provider's displayName onto the user - the
+     google.com providerData entry is where the name and face actually are */
+  const gProf = u => {
+    const gp = (u.providerData || []).filter(
+      pd => pd && pd.providerId === "google.com")[0] || {};
+    return { email: u.email || gp.email || "",
+             name: u.displayName || gp.displayName || "",
+             photo: u.photoURL || gp.photoURL || "" };
+  };
   try {
     const res = await au.linkWithPopup(user, provider);
     const u = res.user;
     if(window.adoptAuthUid)
       adoptAuthUid(u.uid, u.phoneNumber || "", (u.emailVerified && u.email) || "");
     stampEmailOnHosted(u).catch(() => {});
-    return { mode: "linked", email: u.email || "",
-             name: u.displayName || "", photo: u.photoURL || "" };
+    return Object.assign({ mode: "linked" }, gProf(u));
   } catch(e){
     if(e.code === "auth/credential-already-in-use" ||
        e.code === "auth/account-exists-with-different-credential" ||
@@ -8198,9 +8234,7 @@ async function googleAuth(){
       return { mode: "existing", email: googEmail };
     }
     if(e.code === "auth/provider-already-linked"){
-      const u = auth.currentUser;
-      return { mode: "linked", email: u.email || "",
-               name: u.displayName || "", photo: u.photoURL || "" };
+      return Object.assign({ mode: "linked" }, gProf(auth.currentUser));
     }
     throw e;
   }

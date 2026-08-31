@@ -1095,6 +1095,12 @@ button.view-all{display:block;width:100%;text-align:center}
 .claim-row b{font-size:15px;letter-spacing:-.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .claim-row span{margin-left:auto;font-size:13px;color:var(--muted-2);flex:none}
 .claim-or{display:flex;align-items:center;gap:12px;margin:8px 0 12px;color:var(--muted-2);font-size:13px}
+.gsi-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin-top:2px;
+  padding:13px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--card);
+  color:var(--ink);font:600 15px/1 var(--sans);cursor:pointer}
+.gsi-btn:hover{background:var(--soft)}
+.gsi-btn:disabled{opacity:.55;cursor:default}
+.gsi-btn svg{width:18px;height:18px;flex:none}
 .claim-or::before,.claim-or::after{content:"";flex:1;height:1px;background:var(--line)}
 .modal-card .tawrap .inp{padding-right:64px}
 .modal-card .addbox .inp{height:54px}
@@ -1853,6 +1859,7 @@ var STORE = {
    ========================================================= */
 var ME_KEY = 'd2c.me.v2', ME_V1 = 'd2c.me.v1', ME = null;
 var AUTH_PHONE = '';   /* E.164 claim on the auth token - server truth */
+var AUTH_EMAIL = '';   /* verified Google email claim - server truth too */
 var ME_DIRTY = {};     /* profile fields typed but not yet saved */
 var repaintMe = function(){}, promptVerify = function(){};
 
@@ -1894,9 +1901,10 @@ function loadMe(){
 /* the auth layer reports who the server says we are. The first time (and
    after an account switch) the local uid retires into prevUids and the
    profile keys off the server identity from then on. */
-function adoptAuthUid(uid, phone){
+function adoptAuthUid(uid, phone, email){
   var m = loadMe(), changed = false;
   AUTH_PHONE = phone || '';
+  AUTH_EMAIL = email || '';
   if(uid && m.uid !== uid){
     if(m.uid && m.prevUids.indexOf(m.uid) < 0) m.prevUids.push(m.uid);
     var i = m.prevUids.indexOf(uid);
@@ -1986,10 +1994,11 @@ var SMS_OUTAGE = { 'auth/quota-exceeded':1, 'auth/billing-not-enabled':1, 'auth/
 /* the info button pulses until it has been opened once on this device */
 var INFO_KEY = 'd2c.info.v1';
 function infoSeen(){ try{ return !!localStorage.getItem(INFO_KEY); }catch(e){ return true; } }
-/* guest -> named -> verified: the whole sign-in story in one word */
+/* guest -> named -> verified: the whole sign-in story in one word. A Google
+   claim counts - either server-held claim makes the account portable. */
 function authState(){
   var m = loadMe();
-  return phoneVerified() ? 'verified' : (m.name ? 'named' : 'guest');
+  return (phoneVerified() || AUTH_EMAIL) ? 'verified' : (m.name ? 'named' : 'guest');
 }
 /* real texts whenever Firebase got its keys - SMS does not need the events
    stream, and gating on STORE.mode left the sheet mute if the snapshot was
@@ -2355,6 +2364,12 @@ function discover(q){
 function h(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 function ico(id,cls){ return '<svg class="i'+(cls?' '+cls:'')+'"><use href="#'+id+'"/></svg>'; }
+/* the four-colour G - Google's sign-in mark, inline so no external asset */
+function gLogo(){ return '<svg viewBox="0 0 48 48" aria-hidden="true">'+
+  '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'+
+  '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'+
+  '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'+
+  '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>'; }
 function img(url,alt,cls){ return '<img'+(cls?' class="'+cls+'"':'')+' src="'+h(url||'')+'" alt="'+
   h(alt||'')+'" loading="lazy" decoding="async">'; }
 function fname(n){ return nfl(n); }
@@ -2428,9 +2443,10 @@ function infoBtn(mini){
   return '<button class="round-btn'+(mini?' mini':'')+' info-btn'+(infoSeen()?'':' pulse')+
     '" type="button" data-info aria-label="How Down2Chill works">'+ico('help')+'</button>';
 }
-/* dot + label: green verified, amber parked-for-later, gray this device */
+/* dot + label: green verified/signed-in, amber parked-for-later, gray device */
 function dotState(){
   return phoneVerified() ? [' ok','verified']
+       : AUTH_EMAIL      ? [' ok','signed in with Google']
        : verifyPending() ? [' pend','verification paused']
        : ['','guest on this device'];
 }
@@ -2493,7 +2509,7 @@ function infoCard(){
     '<ul class="ilist">'+
       '<li>No passwords here. RSVP, chat, and add photos right away - everything saves to this device automatically.</li>'+
       '<li>Put a name and photo on your profile so friends recognize you.</li>'+
-      '<li>Verify your number once (we text a code) and every device you verify it on becomes one account - your events follow you.</li>'+
+      '<li>Verify your number once (we text a code) - or sign in with Google - and every device you use it on becomes one account. Your events follow you.</li>'+
       '<li>Not verifying is fine too - things just stay on this device.</li>'+
     '</ul>'+
     '<p class="onote center">'+(location.hash.indexOf('#profile')===0
@@ -4779,6 +4795,8 @@ function claimCard(ev){
         h(loadMe().name || '') + '">' +
       '<button class="addbtn lbl" type="button" data-claim-go>That\u2019s me' + ico('arr') + '</button>' +
     '</div>' +
+    '<div class="claim-or"><span>or</span></div>' +
+    '<button class="gsi-btn" type="button" data-google>' + gLogo() + 'Continue with Google</button>' +
     (needOk ? '<p class="onote center">Names not on the list are sent to ' +
       h(fname(ev.hostName)) + ' for approval.</p>' : '') +
   '</div>';
@@ -4851,6 +4869,25 @@ function finishCard(){
    runs until the user agrees), then the code entry. Demo builds walk the same
    stages without sending anything. */
 var VF = { stage: 'send' };
+/* the identity being claimed (a phone number, a Google account) already
+   belongs to ANOTHER Down2Chill account. Switching is an explicit choice,
+   never automatic - and it signs this device into that account rather than
+   copying anything anywhere. Shared by both providers; SW says which. */
+var SW = { kind: 'phone', label: '' };
+function switchCard(){
+  return '<div class="modal-card claim">' +
+    '<button class="modal-x" type="button" data-switch-no aria-label="Close">' + ico('x') + '</button>' +
+    '<div class="modal-ic">' + (SW.kind === 'google' ? gLogo() : ico('lock')) + '</div>' +
+    '<h3 id="modal-h">Use your existing account?</h3>' +
+    '<p><b>' + h(SW.label || (SW.kind === 'google' ? 'That Google account' : 'That number')) +
+      '</b> already belongs to a Down2Chill account - probably yours, from another device.</p>' +
+    '<p class="fsub">Use it here and this device signs into that account - your events ' +
+      'from this device come along. Staying separate keeps this device its own guest ' +
+      'profile.</p>' +
+    '<button class="modal-cta" type="button" data-switch-go>Use my existing account</button>' +
+    '<button class="modal-later" type="button" data-switch-no>Stay separate on this device</button>' +
+  '</div>';
+}
 function verifyCard(){
   var m = loadMe(), live = smsLive();
   var tel = h(live ? toE164(m.phone) : m.phone);
@@ -4858,19 +4895,6 @@ function verifyCard(){
     '<button class="modal-x" type="button" data-modal-close aria-label="Close">' + ico('x') + '</button>' +
     '<div class="modal-ic">' + ico('lock') + '</div>' +
     '<h3 id="modal-h">Verify your number</h3>';
-  if(VF.stage === 'switch')
-    /* the number is already the claim on ANOTHER account. Switching is an
-       explicit choice, never automatic - and it signs this device into that
-       account rather than copying anything anywhere. */
-    return head +
-      '<p><b>' + tel + '</b> already belongs to a Down2Chill account - probably yours, from ' +
-        'another device.</p>' +
-      '<p class="fsub">Use it here and this device signs into that account - your events ' +
-        'from this device come along. Staying separate keeps this device its own guest ' +
-        'profile, and the number stays with the account that verified it.</p>' +
-      '<button class="modal-cta" type="button" data-switch-go>Use my existing account</button>' +
-      '<button class="modal-later" type="button" data-switch-no>Stay separate on this device</button>' +
-    '</div>';
   if(VF.stage === 'send')
     return head +
       '<p><b>' + tel + '</b> links your events across every device you use it on once it\u2019s verified.</p>' +
@@ -4922,6 +4946,7 @@ function renderProfile(){
     '<section class="sec"><div class="sec-h"><h2>Account</h2></div><div class="scard">' +
       '<div class="srow noact"><span class="sic">' + ico('lock') + '</span><b>Status</b>' +
         '<span class="sval">' + (phoneVerified() ? 'Verified'
+          : AUTH_EMAIL ? 'Signed in with Google'
           : verifyPending() ? 'Verification paused' : 'Guest · this device') + '</span></div>' +
       '<div class="srow noact"><span class="sic">' + ico('person') + '</span><b>Account ID</b>' +
         '<span class="sval mono">' + h(m.uid) + '</span></div>' +
@@ -4930,11 +4955,18 @@ function renderProfile(){
       '<div class="srow' + (vnow ? ' act" data-verifynow role="button" tabindex="0"' : ' noact"') +
         '><span class="sic">' + ico('phone') + '</span><b>Your number</b>' +
         '<span class="sval">' + vlab + '</span></div>' +
+      '<div class="srow' + (AUTH_EMAIL ? ' noact"' : ' act" data-google role="button" tabindex="0"') +
+        '><span class="sic">' + ico('mail') + '</span><b>Google</b>' +
+        '<span class="sval">' + (AUTH_EMAIL ? h(AUTH_EMAIL) : 'Tap to connect') + '</span></div>' +
     '</div></section>' +
-    (phoneVerified() ?
+    (phoneVerified() || AUTH_EMAIL ?
       '<section class="sec"><div class="sec-h"><h2>Your devices</h2></div>' +
-      '<p class="fsub">Verify ' + h(toE164(m.phone)) + ' on any other device and it signs ' +
-        'into this same account - no passwords, nothing to merge.</p></section>' : '') +
+      '<p class="fsub">' +
+        (phoneVerified() ? 'Verify ' + h(toE164(m.phone)) : '') +
+        (phoneVerified() && AUTH_EMAIL ? ' - or sign in with Google as ' + h(AUTH_EMAIL) + ' - ' : '') +
+        (!phoneVerified() && AUTH_EMAIL ? 'Sign in with Google as ' + h(AUTH_EMAIL) : '') +
+        ' on any other device and it signs into this same account - no passwords, ' +
+        'nothing to merge.</p></section>' : '') +
   '</div>';
 }
 
@@ -5475,12 +5507,13 @@ function eventDock(id){
     if(swg){
       if(swg.disabled) return;
       swg.disabled=true; swg.textContent='Switching…';
-      D2C.smsSwitch().then(function(res){
+      (SW.kind==='google' ? D2C.googleSwitch() : D2C.smsSwitch()).then(function(res){
         closeModal();
         toast(res && res.name ? 'Welcome back, '+fname(res.name)+'!' : 'Signed into your account','top');
         repaintMe(); remapRoles(); STORE.notify();
+        afterAuthClaim();
       }).catch(function(e){
-        if(e && e.code==='auth/requires-recent-code'){
+        if(SW.kind!=='google' && e && e.code==='auth/requires-recent-code'){
           /* the one-time code was spent proving the number - text a fresh one
              and confirm it straight into the existing account */
           VF.stage='code'; modal.innerHTML=verifyCard();
@@ -5493,9 +5526,46 @@ function eventDock(id){
       return;
     }
     if(t.closest('[data-switch-no]')){
-      closeModal();
+      GCTX=null; closeModal();
       toast('Staying separate - this device keeps its own guest profile','',4500);
       repaintMe();
+      return;
+    }
+    var gbt=t.closest('[data-google]');
+    if(gbt){
+      if(gbt.disabled) return;
+      if(!smsLive()){ toast('Demo build - sign-in needs the Firebase keys','err',4500); return; }
+      if(AUTH_EMAIL){ toast('Google connected as '+AUTH_EMAIL); return; }
+      /* remember what the person was doing so the sign-in finishes it */
+      GCTX={ claim: !!modal.querySelector('[data-claimfor]'), id: route().id,
+             pr: pendingRsvp, at: Date.now() };
+      gbt.disabled=true;
+      D2C.googleAuth().then(function(res){
+        if(res.mode==='existing'){
+          /* the Google account already IS a Down2Chill account - explicit
+             chooser, same as a phone number that changed hands */
+          SW={ kind:'google', label: res.email||'That Google account' };
+          modal.innerHTML=switchCard(); modal.hidden=false;
+          document.body.classList.add('modal-open'); modalShown();
+          return;
+        }
+        /* linked in place: same uid, Google becomes a claim on it - its
+           name and photo only ever fill blanks, never overwrite */
+        var gm=loadMe();
+        if(res.name && !gm.name) gm.name=res.name;
+        if(res.photo && !gm.photo) gm.photo=res.photo;
+        saveMe(); closeModal();
+        toast('Google connected'+(res.email?' as '+res.email:''),'top');
+        repaintMe(); afterAuthClaim();
+      }).catch(function(e){
+        gbt.disabled=false;
+        if(e && (e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')) return;
+        if(e && e.code==='auth/popup-blocked'){
+          toast('Your browser blocked the sign-in popup - allow popups and try again','err',5200);
+          return;
+        }
+        toast(smsErr(e),'err',5200);
+      });
       return;
     }
     var rok=t.closest('[data-rok]');
@@ -5945,6 +6015,23 @@ function eventDock(id){
     document.body.classList.add('modal-open');
     modalShown();
   };
+  /* a Google tap from the "Who are you?" sheet parks the claim context here
+     and finishes the claim once the sign-in (link or switch) lands. Stale
+     contexts (an abandoned chooser) expire rather than firing later. */
+  var GCTX=null;
+  function afterAuthClaim(){
+    var c=GCTX; GCTX=null;
+    if(!c || !c.claim || Date.now()-c.at>300000) return;
+    var ev=findEvent(c.id);
+    if(route().id!==c.id || !ev) return;
+    pendingRsvp=c.pr||null;
+    var m=loadMe();
+    if(m.name) doClaim(m.name, true, '');
+    else {
+      modal.innerHTML=claimCard(ev); modal.hidden=false;
+      document.body.classList.add('modal-open'); modalShown();
+    }
+  }
   /* the code matched. Three outcomes, all server-decided:
        linked   - the claim landed on THIS account (same uid, upgraded in place)
        updated  - the account already had a number; the claim moved to this one
@@ -5953,8 +6040,8 @@ function eventDock(id){
   function smsVerified(res){
     var m=loadMe(), mode=(res&&res.mode)||'linked', tel=(res&&res.phone)||toE164(m.phone);
     if(mode==='existing'){
-      VF.stage='switch';
-      modal.innerHTML=verifyCard(); modal.hidden=false;
+      SW={ kind:'phone', label: tel };
+      modal.innerHTML=switchCard(); modal.hidden=false;
       document.body.classList.add('modal-open');
       modalShown(); return;
     }
@@ -7138,13 +7225,16 @@ async function initFirebase(){
   if(!uid) authDown();
 
   fb = { app, db, storage, auth, au, uid, fs, st };
-  /* keep the classic script's view of "who am I" pinned to the token */
+  /* keep the classic script's view of "who am I" pinned to the token -
+     phone claim + verified Google email claim ride along */
+  const claimEmail = u => (u && u.emailVerified && u.email) || "";
   au.onAuthStateChanged(auth, u => {
     fb.uid = u ? u.uid : null;
-    if(u && window.adoptAuthUid) adoptAuthUid(u.uid, u.phoneNumber || "");
+    if(u && window.adoptAuthUid) adoptAuthUid(u.uid, u.phoneNumber || "", claimEmail(u));
   });
   if(auth.currentUser && window.adoptAuthUid)
-    adoptAuthUid(auth.currentUser.uid, auth.currentUser.phoneNumber || "");
+    adoptAuthUid(auth.currentUser.uid, auth.currentUser.phoneNumber || "",
+                 claimEmail(auth.currentUser));
   /* localStorage is only a cache - people/{uid} is the record. Pull it once
      per boot so cleared storage (or a fresher edit from another device)
      costs nothing. Best-effort: offline boots just use the cache. */
@@ -7313,7 +7403,9 @@ async function createEvent(draft){
      so an "" stamp would lock the host out of their own event for good. */
   const hu = authUid();
   if(hu) data.hostAuthUid = hu;
-  data.hostPhone   = (fb.auth.currentUser && fb.auth.currentUser.phoneNumber) || "";
+  const cu = fb.auth.currentUser;
+  data.hostPhone = (cu && cu.phoneNumber) || "";
+  data.hostEmail = (cu && cu.emailVerified && cu.email) || "";
 
   /* a phone number typed about an invitee is the HOST's contact hint - it
      goes in the host-only contacts subcollection, never on the event doc
@@ -7919,7 +8011,7 @@ async function smsCheck(code){
      and the person said "use it" - this fresh code signs straight in */
   if(smsWantSwitch){
     smsVerifId = null; smsAbort();
-    return doSwitch(cred);
+    return doSwitch(cred, "phone");
   }
   const user = auth.currentUser;
   try {
@@ -7949,19 +8041,25 @@ async function smsCheck(code){
     throw e;   /* wrong guess -> auth/invalid-verification-code, etc */
   }
 }
-/* the explicit, consented switch to the account that owns the number.
-   Order matters: while STILL the guest account we stamp the proven number
-   onto events we host (the rules' hostPhone door stays open across the
-   switch) and lift our own guest rows; then we sign in; then rows and host
-   stamps are re-homed under the account we joined. Data moves by reference
-   to the new principal - the old account's record stays where it was. */
-async function doSwitch(cred){
+/* the explicit, consented switch to the account that owns the identity (a
+   phone number or a Google account). Order matters: while STILL the guest
+   account we stamp the proven claim onto events we host (the rules' door -
+   hostPhone or hostEmail - stays open across the switch) and lift our own
+   guest rows; then we sign in; then rows and host stamps are re-homed under
+   the account we joined. Data moves by reference to the new principal - the
+   old account's record stays where it was. */
+async function doSwitch(cred, kind){
   const { auth, au, db, fs } = fb;
-  if(!smsSwitchCred && !cred){
-    /* nothing stashed (page reloaded between rounds) - one more code */
-    smsWantSwitch = true;
-    throw { code: "auth/requires-recent-code", message: "one more code needed" };
+  kind = kind || "phone";
+  if(!cred){
+    if(kind === "phone"){
+      /* nothing stashed (page reloaded between rounds) - one more code */
+      smsWantSwitch = true;
+      throw { code: "auth/requires-recent-code", message: "one more code needed" };
+    }
+    throw { code: "auth/invalid-credential", message: "sign in with Google again" };
   }
+  const door = kind === "google" ? { hostEmail: googEmail } : { hostPhone: smsTo };
   const old = auth.currentUser, oldUid = old ? old.uid : "";
   const m = window.loadMe ? loadMe() : { events: [] };
   let hosted = [], rows = [];
@@ -7970,8 +8068,7 @@ async function doSwitch(cred){
       const evs = await fs.getDocs(fs.query(
         fs.collection(db, ...FS_ROOT, "events"), fs.where("hostAuthUid", "==", oldUid)));
       hosted = evs.docs.map(d => d.id);
-      await Promise.all(evs.docs.map(d =>
-        fs.updateDoc(d.ref, { hostPhone: smsTo }).catch(() => {})));
+      await Promise.all(evs.docs.map(d => fs.updateDoc(d.ref, door).catch(() => {})));
     } catch(e){}
     await Promise.all((m.events || []).map(async id => {
       try {
@@ -7982,24 +8079,28 @@ async function doSwitch(cred){
     }));
   }
   let credRes;
-  try { credRes = await au.signInWithCredential(auth, smsSwitchCred || cred); }
+  try { credRes = await au.signInWithCredential(auth, cred); }
   catch(e){
-    /* the stashed credential was spent proving the number - put the lifted
-       rows back and ask for one more code that signs straight in */
+    /* put the lifted rows back before reporting anything */
     await Promise.all(rows.map(r =>
       fs.setDoc(fs.doc(db, ...FS_ROOT, "events", r.id, "guests", oldUid), r.data)
         .catch(() => {})));
-    if(e.code === "auth/invalid-verification-code" || e.code === "auth/code-expired" ||
-       e.code === "auth/invalid-credential" || e.code === "auth/missing-verification-id"){
+    /* a phone OTP credential is single-use - it may have been spent proving
+       the number; ask for one more code that signs straight in */
+    if(kind === "phone" &&
+       (e.code === "auth/invalid-verification-code" || e.code === "auth/code-expired" ||
+        e.code === "auth/invalid-credential" || e.code === "auth/missing-verification-id")){
       smsWantSwitch = true;
       throw { code: "auth/requires-recent-code", message: "one more code needed" };
     }
     throw e;
   }
-  smsWantSwitch = false; smsSwitchCred = null;
+  smsWantSwitch = false; smsSwitchCred = null; googSwitchCred = null;
   const user = credRes.user;
   fb.uid = user.uid;
-  if(window.adoptAuthUid) adoptAuthUid(user.uid, user.phoneNumber || "");
+  if(window.adoptAuthUid)
+    adoptAuthUid(user.uid, user.phoneNumber || "",
+                 (user.emailVerified && user.email) || "");
   /* re-home the lifted guest rows under the account's uid */
   await Promise.all(rows.map(r =>
     fs.setDoc(fs.doc(db, ...FS_ROOT, "events", r.id, "guests", user.uid),
@@ -8032,6 +8133,60 @@ function smsAbort(){
   if(smsCap){ try{ smsCap.clear(); }catch(e){} smsCap = null; }
   const h = document.getElementById("sms-captcha");
   if(h) h.remove();
+}
+
+/* ---------------- Google sign-in (second claim on the same account) ------
+   Same shape as the phone flow: linkWithPopup upgrades THIS account in
+   place (same uid, Google becomes a claim on its token); a Google account
+   that already belongs to another Down2Chill account returns mode
+   "existing" and nothing switches without the explicit chooser. A phone-
+   verified user adding Google in their profile goes through this exact
+   path - Firebase happily holds both providers on one user. */
+let googSwitchCred = null, googEmail = "";
+async function googleAuth(){
+  const { auth, au } = await initFirebase();
+  const user = auth.currentUser;
+  if(!user) throw { code: "auth/network-request-failed", message: "not signed in yet" };
+  const provider = new au.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  try {
+    const res = await au.linkWithPopup(user, provider);
+    const u = res.user;
+    if(window.adoptAuthUid)
+      adoptAuthUid(u.uid, u.phoneNumber || "", (u.emailVerified && u.email) || "");
+    stampEmailOnHosted(u).catch(() => {});
+    return { mode: "linked", email: u.email || "",
+             name: u.displayName || "", photo: u.photoURL || "" };
+  } catch(e){
+    if(e.code === "auth/credential-already-in-use" ||
+       e.code === "auth/account-exists-with-different-credential" ||
+       e.code === "auth/email-already-in-use"){
+      googSwitchCred = (au.GoogleAuthProvider.credentialFromError &&
+                        au.GoogleAuthProvider.credentialFromError(e)) || null;
+      googEmail = (e.customData && e.customData.email) || "";
+      return { mode: "existing", email: googEmail };
+    }
+    if(e.code === "auth/provider-already-linked"){
+      const u = auth.currentUser;
+      return { mode: "linked", email: u.email || "",
+               name: u.displayName || "", photo: u.photoURL || "" };
+    }
+    throw e;
+  }
+}
+/* once Google is a claim on a hosting account, stamp its email onto the
+   hosted events so a device that later signs in by Google keeps host
+   powers through the rules' hostEmail door (mirror of hostPhone) */
+async function stampEmailOnHosted(u){
+  if(!(u.emailVerified && u.email)) return;
+  const { db, fs } = fb;
+  try {
+    const evs = await fs.getDocs(fs.query(
+      fs.collection(db, ...FS_ROOT, "events"), fs.where("hostAuthUid", "==", u.uid)));
+    await Promise.all(evs.docs.map(d =>
+      (d.data().hostEmail || "") === u.email ? null
+        : fs.updateDoc(d.ref, { hostEmail: u.email }).catch(() => {})));
+  } catch(e){}
 }
 
 /* ---------------- live data ----------------
@@ -8362,7 +8517,9 @@ window.D2C = {
   uploadCover, deleteFile, createEvent, updateEvent, deleteEvent,
   deletePhoto, deleteMessage, editMessage,
   saveProfile, pullProfile, watchMine, setRsvp, setPlus, propagateProfile, announceGuest,
-  smsSend, smsCheck, smsSwitch: () => doSwitch(null), smsAbort, smsReady: () => KEY_OK,
+  smsSend, smsCheck, smsSwitch: () => doSwitch(smsSwitchCred, "phone"),
+  googleAuth, googleSwitch: () => doSwitch(googSwitchCred, "google"),
+  smsAbort, smsReady: () => KEY_OK,
   smsPending: () => smsVerifId ? smsTo : "",  // E.164 a code is out to, else ""
   watchEvent(id){ watchingId = id; stopDetail(); ensureEvent(id); watchDetail(id); },
   unwatchEvent(){ watchingId = null; stopDetail(); },

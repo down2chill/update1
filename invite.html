@@ -1840,18 +1840,23 @@ var STORE = {
 };
 
 /* ================= WHO IS LOOKING AT THIS =================
-   Every visitor gets a random uid the first time the page loads, kept in
-   localStorage so a returning visitor is the same person. The profile
-   (name / phone / photo) hangs off that uid; a matching phone number pulls
-   several uids together into one account. The registry keeps every profile
-   this browser has seen so linking works offline; live mode mirrors the
-   profile into Firestore under visitors/{uid}.
+   Identity is SERVER-issued. Firebase Auth mints an opaque uid for every
+   visitor (anonymous at first) and that uid - never the phone number, never
+   a browser-minted string - keys every record. localStorage only CACHES the
+   profile; people/{uid} in Firestore is the source of truth and re-hydrates
+   on every boot, so cleared storage costs nothing. Verifying a phone number
+   upgrades the SAME account in place (linkWithCredential): the number is a
+   verified claim ON the identity, not the identity. prevUids remembers
+   earlier uids this person held here (the pre-auth local id, a guest
+   profile replaced by an account switch) purely so their old rows still
+   read as "you" - it grants nothing; the rules only trust the auth uid.
    ========================================================= */
-var ME_KEY = 'd2c.me.v1', REG_KEY = 'd2c.visitors.v1', ME = null;
-var ME_DIRTY = {};   /* profile fields typed but not yet saved */
-var repaintMe = function(){}, promptVerify = function(){}, promptLinkChoice = function(){};
+var ME_KEY = 'd2c.me.v2', ME_V1 = 'd2c.me.v1', ME = null;
+var AUTH_PHONE = '';   /* E.164 claim on the auth token - server truth */
+var ME_DIRTY = {};     /* profile fields typed but not yet saved */
+var repaintMe = function(){}, promptVerify = function(){};
 
-function newUid(){
+function newUid(){   /* pre-auth placeholder only - the auth uid replaces it */
   var a = new Uint8Array(8), i, s = '';
   if(window.crypto && crypto.getRandomValues) crypto.getRandomValues(a);
   else for(i = 0; i < 8; i++) a[i] = Math.floor(Math.random() * 256);
@@ -1862,31 +1867,67 @@ function loadMe(){
   if(ME) return ME;
   try{ ME = JSON.parse(localStorage.getItem(ME_KEY) || 'null'); }catch(e){}
   if(!ME || !ME.uid){
-    ME = { uid: newUid(), name: '', phone: '', photo: '', verifiedPhone: '', events: [], claims: {}, rsvp: {}, linked: [], cloudLinked: [] };
+    /* migrate a v1 profile: the person survives, the phone-link engine doesn't */
+    var v1 = null;
+    try{ v1 = JSON.parse(localStorage.getItem(ME_V1) || 'null'); }catch(e){}
+    ME = v1 && v1.uid
+      ? { uid: v1.uid, name: v1.name || '', phone: v1.phone || '', photo: v1.photo || '',
+          events: v1.events || [], claims: v1.claims || {}, claimRow: v1.claimRow || {},
+          rsvp: v1.rsvp || {}, plus: v1.plus || {}, verifyDeclined: v1.verifyDeclined || '',
+          at: v1.at || 0 }
+      : { uid: newUid(), name: '', phone: '', photo: '', events: [], claims: {}, rsvp: {} };
     try{ localStorage.setItem(ME_KEY, JSON.stringify(ME)); }catch(e){}
   }
   if(!Array.isArray(ME.events)) ME.events = [];
-  if(!Array.isArray(ME.linked)) ME.linked = [];
-  if(!Array.isArray(ME.cloudLinked)) ME.cloudLinked = [];
-  if(!Array.isArray(ME.linkRejects)) ME.linkRejects = [];
-  /* pre-chooser profiles linked every match - carry those over as accepted */
-  if(!Array.isArray(ME.linkOks)){
-    ME.linkOks = [];
-    ME.linked.concat(ME.cloudLinked.map(function(p){ return p.uid; }))
-      .forEach(function(u){ if(ME.linkOks.indexOf(u) < 0) ME.linkOks.push(u); });
-  }
+  if(!Array.isArray(ME.prevUids)) ME.prevUids = [];
   if(!ME.claims || typeof ME.claims !== 'object') ME.claims = {};
   /* which curated guest ROW each claim took - lets two people who share a
      full name hold separate spots on the same event */
   if(!ME.claimRow || typeof ME.claimRow !== 'object') ME.claimRow = {};
   if(!ME.rsvp || typeof ME.rsvp !== 'object') ME.rsvp = {};
-  if(typeof ME.verifiedPhone !== 'string') ME.verifiedPhone = '';
-  if(typeof ME.verifiedAt !== 'number') ME.verifiedAt = 0;
   if(typeof ME.verifyDeclined !== 'string') ME.verifyDeclined = '';
   if(typeof ME.verifyPending !== 'string') ME.verifyPending = '';
   if(typeof ME.verifyPendingAt !== 'number') ME.verifyPendingAt = 0;
   if(!ME.plus || typeof ME.plus !== 'object') ME.plus = {};
   return ME;
+}
+/* the auth layer reports who the server says we are. The first time (and
+   after an account switch) the local uid retires into prevUids and the
+   profile keys off the server identity from then on. */
+function adoptAuthUid(uid, phone){
+  var m = loadMe(), changed = false;
+  AUTH_PHONE = phone || '';
+  if(uid && m.uid !== uid){
+    if(m.uid && m.prevUids.indexOf(m.uid) < 0) m.prevUids.push(m.uid);
+    var i = m.prevUids.indexOf(uid);
+    if(i > -1) m.prevUids.splice(i, 1);
+    m.uid = uid; changed = true;
+  }
+  /* the token's number is verified truth - it fills an empty profile field */
+  if(AUTH_PHONE && !m.phone){ m.phone = AUTH_PHONE; changed = true; }
+  if(changed){ saveMe(); remapRoles(); STORE.notify(); }
+  repaintMe();
+}
+/* server profile (people/{uid}) beats the local cache when it is newer -
+   another device may have edited the profile since this one last saved */
+function hydrateProfile(doc){
+  if(!doc) return;
+  var m = loadMe();
+  (doc.prevUids || []).forEach(function(u){
+    if(u !== m.uid && m.prevUids.indexOf(u) < 0) m.prevUids.push(u);
+  });
+  (doc.events || []).forEach(function(id){ if(m.events.indexOf(id) < 0) m.events.push(id); });
+  var k;
+  for(k in (doc.rsvp || {}))     if(!m.rsvp[k])     m.rsvp[k]     = doc.rsvp[k];
+  for(k in (doc.claims || {}))   if(!m.claims[k])   m.claims[k]   = doc.claims[k];
+  for(k in (doc.claimRow || {})) if(!m.claimRow[k]) m.claimRow[k] = doc.claimRow[k];
+  for(k in (doc.plus || {}))     if(!m.plus[k])     m.plus[k]     = doc.plus[k];
+  if((doc.at || 0) > (m.at || 0)){
+    if(doc.name  && !ME_DIRTY.name)  m.name  = doc.name;
+    if(doc.photo && !ME_DIRTY.photo) m.photo = doc.photo;
+    if(doc.phone && !ME_DIRTY.phone && !m.phone) m.phone = doc.phone;
+  }
+  saveMe(); remapRoles(); STORE.notify(); repaintMe();
 }
 /* another tab or a bfcache-restored page may hold a STALE in-memory profile;
    before it acts (or saves), adopt the stored copy when that one is newer -
@@ -1914,29 +1955,12 @@ function toE164(p){
   if(d.length === 11 && d.charAt(0) === '1') return '+' + d;
   return d ? '+' + d : '';
 }
-function regAll(){
-  try{ return JSON.parse(localStorage.getItem(REG_KEY) || '{}') || {}; }catch(e){ return {}; }
-}
-/* every OTHER uid that carries my phone number, verified or not */
-function phoneMatches(){
-  var m = loadMe(), mine = normPhone(m.phone);
-  if(!mine) return [];
-  var reg = regAll(), out = [], k;
-  for(k in reg) if(k !== m.uid && normPhone(reg[k].phone) === mine &&
-                   m.linkRejects.indexOf(k) < 0) out.push(reg[k]);
-  (m.cloudLinked || []).forEach(function(p){
-    /* an entry only matches the number it actually carries - after a number
-       change, the old number's linked accounts are no longer "matches" */
-    if(p.uid !== m.uid && normPhone(p.phone) === mine &&
-       m.linkRejects.indexOf(p.uid) < 0 &&
-       !out.some(function(o){ return o.uid === p.uid; })) out.push(p);
-  });
-  return out;
-}
-/* a duplicate number only links accounts after the 2FA-style confirmation */
+/* verified = the number in the profile IS the number on the auth token.
+   Computed, never stored - the server owns the claim, so nothing local can
+   fake it and nothing local can silently lose it. */
 function phoneVerified(){
-  var m = loadMe(), p = normPhone(m.phone);
-  return !!p && m.verifiedPhone === p;
+  var m = loadMe();
+  return !!AUTH_PHONE && toE164(m.phone) === AUTH_PHONE;
 }
 /* the user said "skip" for this exact number - never auto-ask it again */
 function verifyDeclined(){
@@ -1967,26 +1991,6 @@ function authState(){
   var m = loadMe();
   return phoneVerified() ? 'verified' : (m.name ? 'named' : 'guest');
 }
-/* a match only counts while OUR 2FA outranks theirs: whoever passed the code
-   most recently owns the number now, and unless they accepted us as one of
-   their own devices, their account is sealed to us until we re-verify - a
-   recycled number's old owner must never ride into its new owner's account */
-function linkFresh(p){
-  var m = loadMe();
-  return !(p.verified && (p.verifiedAt || 0) > (m.verifiedAt || 0) &&
-           (p.linkOks || []).indexOf(m.uid) < 0);
-}
-function linkedProfiles(){
-  var ok = loadMe().linkOks;
-  return phoneVerified() ? phoneMatches().filter(function(p){
-    return ok.indexOf(p.uid) > -1 && linkFresh(p); }) : [];
-}
-/* verified matches still waiting on the link chooser's yes/no */
-function linkPend(){
-  var ok = loadMe().linkOks;
-  return phoneVerified() ? phoneMatches().filter(function(p){
-    return ok.indexOf(p.uid) < 0 && linkFresh(p); }) : [];
-}
 /* real texts whenever Firebase got its keys - SMS does not need the events
    stream, and gating on STORE.mode left the sheet mute if the snapshot was
    slow or the copy missed build substitution */
@@ -1999,7 +2003,9 @@ var SMS_ERR = {
   'auth/quota-exceeded': 'The SMS quota is used up right now - try again later.',
   'auth/billing-not-enabled': 'SMS needs billing (Blaze) enabled on the Firebase project.',
   'auth/operation-not-allowed': 'Phone sign-in (or this country) is switched off in Firebase.',
-  'auth/captcha-check-failed': 'This domain isn’t authorized for Firebase sign-in.'
+  'auth/captcha-check-failed': 'This domain isn’t authorized for Firebase sign-in.',
+  'auth/requires-recent-login': 'Changing numbers needs a fresh session - reload the page and try again.',
+  'auth/user-token-expired': 'Your session expired - reload the page and try again.'
 };
 function smsErr(e){ return SMS_ERR[e && e.code] || 'Couldn’t verify (' + ((e && (e.code || e.message)) || 'unknown') + ')'; }
 /* 30s between texts - stops tap-spam from burning billed SMS */
@@ -2018,19 +2024,6 @@ function armCooldown(){
     if(b){ b.disabled = true; b.textContent = 'Resend in ' + left + 's'; }
   }, 500);
 }
-/* one name (and one face) across every linked account */
-function commonizeName(name){
-  var m = loadMe(), reg = regAll();
-  m.name = name;
-  linkedProfiles().forEach(function(p){ p.name = name; if(reg[p.uid]) reg[p.uid].name = name; });
-  try{ localStorage.setItem(REG_KEY, JSON.stringify(reg)); }catch(e){}
-}
-function commonizePhoto(photo){
-  var m = loadMe(), reg = regAll();
-  m.photo = photo;
-  linkedProfiles().forEach(function(p){ p.photo = photo; if(reg[p.uid]) reg[p.uid].photo = photo; });
-  try{ localStorage.setItem(REG_KEY, JSON.stringify(reg)); }catch(e){}
-}
 /* linking changes who "hosting" means - recompute every event's role */
 function remapRoles(){
   var uids = myUids();
@@ -2038,97 +2031,29 @@ function remapRoles(){
     if(e.hostUid) e.role = uids.indexOf(e.hostUid) > -1 ? 'hosting' : 'invited';
   });
 }
-/* every event any of my linked uids opened or was invited to */
-function myEvents(){
-  var seen = {}, out = [];
-  [loadMe()].concat(linkedProfiles()).forEach(function(p){
-    (p.events || []).forEach(function(id){ if(!seen[id]){ seen[id] = 1; out.push(id); } });
-  });
-  return out;
-}
-/* me plus every uid linked to me by phone number */
+/* every event this account opened or was invited to */
+function myEvents(){ return loadMe().events.slice(); }
+/* my current uid plus every uid I held before (display continuity only -
+   authorization always rides on the auth uid alone) */
 function myUids(){
-  var m = loadMe(), out = [m.uid], doc = {};
-  (m.cloudLinked || []).forEach(function(p){ doc[p.uid] = p; });
-  /* m.linked persists between saves - a stale entry must not outlive the
-     freshness check when we DO hold the uid's cloud doc */
-  (m.linked || []).forEach(function(u){
-    if(out.indexOf(u) < 0 && (!doc[u] || linkFresh(doc[u]))) out.push(u); });
-  (m.cloudLinked || []).forEach(function(p){
-    if(m.linkOks.indexOf(p.uid) > -1 && linkFresh(p) && out.indexOf(p.uid) < 0) out.push(p.uid); });
-  return out;
-}
-/* my answer for an event - mine first, then anything a linked uid said */
-function myPlus(id){
   var m = loadMe();
-  if(m.plus[id]) return m.plus[id];
-  var lp = linkedProfiles(), i;
-  for(i = 0; i < lp.length; i++) if(lp[i].plus && lp[i].plus[id]) return lp[i].plus[id];
-  return 0;
+  return [m.uid].concat(m.prevUids || []);
 }
-function myRsvp(id){
-  var m = loadMe();
-  if(m.rsvp[id]) return m.rsvp[id];
-  var lp = linkedProfiles(), i;
-  for(i = 0; i < lp.length; i++) if(lp[i].rsvp && lp[i].rsvp[id]) return lp[i].rsvp[id];
-  return '';
-}
+function myPlus(id){ return loadMe().plus[id] || 0; }
+function myRsvp(id){ return loadMe().rsvp[id] || ''; }
 function saveMe(){
   refreshMe();   /* never save over a newer copy from another context */
-  var m = loadMe(), reg = regAll();
+  var m = loadMe();
   m.at = Date.now();
-  reg[m.uid] = { uid: m.uid, name: m.name, phone: m.phone, photo: m.photo, at: m.at,
-                 events: m.events, claims: m.claims, claimRow: m.claimRow,
-                 rsvp: m.rsvp, plus: m.plus };
-  m.linked = linkedProfiles().map(function(p){ return p.uid; });
-  try{
-    localStorage.setItem(ME_KEY, JSON.stringify(m));
-    localStorage.setItem(REG_KEY, JSON.stringify(reg));
-  }catch(e){}
+  try{ localStorage.setItem(ME_KEY, JSON.stringify(m)); }catch(e){}
   ME_DIRTY = {};   /* the typed values are persisted now */
+  /* localStorage is only the cache - people/{uid} is the record */
   if(STORE.mode === 'live' && window.D2C && D2C.saveProfile){
-    D2C.saveProfile({ uid: m.uid, name: m.name, phone: normPhone(m.phone),
-                      verified: phoneVerified(), verifiedAt: m.verifiedAt || 0,
-                      linkOks: m.linkOks,
-                      photo: m.photo || '', at: m.at, events: m.events, claims: m.claims,
-                      claimRow: m.claimRow, rsvp: m.rsvp, plus: m.plus })
-      /* rules only answer the phone query for the number's VERIFIED owner */
-      .then(function(){ return (normPhone(m.phone) && phoneVerified()) ? D2C.findByPhone(normPhone(m.phone)) : []; })
-      .then(function(list){
-        /* someone else passed 2FA on this number AFTER us and did not accept
-           us as their own device: the number changed hands. Our verification
-           is void until we pass a fresh code - which the number's old owner
-           can no longer do. */
-        if(phoneVerified() && (list || []).some(function(p){
-             return p.uid !== m.uid && !linkFresh(p); })){
-          m.verifiedPhone = ''; m.verifiedAt = 0;
-          toast('This number was re-verified on another account - verify again to keep your links','err',6000);
-        }
-        m.cloudLinked = (list || []).filter(function(p){
-          return p.uid !== m.uid && m.linkRejects.indexOf(p.uid) < 0; });
-        if(phoneVerified()){
-          m.cloudLinked.forEach(function(p){
-            if(m.linkOks.indexOf(p.uid) < 0 || !linkFresh(p)) return;   /* undecided or outranked */
-            (p.events || []).forEach(function(id){ if(m.events.indexOf(id) < 0) m.events.push(id); });
-            var k;
-            for(k in (p.rsvp || {}))   if(!m.rsvp[k])   m.rsvp[k]   = p.rsvp[k];
-            for(k in (p.claims || {})) if(!m.claims[k]) m.claims[k] = p.claims[k];
-            for(k in (p.claimRow || {})) if(!m.claimRow[k]) m.claimRow[k] = p.claimRow[k];
-            for(k in (p.plus || {}))   if(!m.plus[k])   m.plus[k]   = p.plus[k];
-          });
-          remapRoles(); STORE.notify();
-        }
-        m.linked = linkedProfiles().map(function(p){ return p.uid; });
-        /* the round-trip took time - if another context saved something newer
-           meanwhile, this copy is stale: persist nothing, prompt nothing */
-        var cur = null;
-        try{ cur = JSON.parse(localStorage.getItem(ME_KEY) || 'null'); }catch(e){}
-        if(cur && cur.uid === m.uid && (cur.at || 0) > (m.at || 0)){ refreshMe(); return; }
-        try{ localStorage.setItem(ME_KEY, JSON.stringify(m)); }catch(e){}
-        if(m.cloudLinked.length && !phoneVerified() && !verifyDeclined() && !verifyPending()) promptVerify();
-        else if(linkPend().length) promptLinkChoice();
-        else repaintMe();
-      })
+    D2C.saveProfile({ uid: m.uid, prevUids: m.prevUids || [], name: m.name,
+                      phone: toE164(m.phone), photo: m.photo || '', at: m.at,
+                      events: m.events, claims: m.claims, claimRow: m.claimRow,
+                      rsvp: m.rsvp, plus: m.plus })
+      .then(function(){ if(D2C.watchMine) D2C.watchMine(); })
       .catch(function(e){ console.warn('profile sync failed', e); });
   }
 }
@@ -2169,10 +2094,11 @@ function ago(isoTs){
   if(dd < 7)   return dd + " days ago";
   return new Date(t).toLocaleDateString();
 }
-function msgFrom(m){
+function msgFrom(m, id){
   /* "me" is in the eye of the viewer - the stored isYou flag only breaks the
-     tie for legacy messages that carry no uid. */
-  return { fromUid: m.fromUid || "", fromName: m.fromName || "Someone",
+     tie for legacy messages that carry no uid. id is the message's own doc
+     (subcollection messages); legacy array entries have none. */
+  return { id: id || "", fromUid: m.fromUid || "", fromName: m.fromName || "Someone",
            fromAvatarUrl: m.fromAvatarUrl || "", text: m.text || "",
            imageUrl: m.imageUrl || "", imagePath: m.imagePath || "",
            at: m.at || "", ms: m.ms || 0, edited: !!m.edited,
@@ -2226,9 +2152,15 @@ function docToModel(id, d){
               plus: c.plus||0 },
     guestPreview: d.guestPreview || [],
     photoCount: d.photoCount || 0, lastPhotoLabel: d.lastPhotoLabel || "",
-    /* messages ride along on the event document, so they are realtime for
-       free and need no extra listener. */
-    messages: (d.chatMessages || []).map(msgFrom),
+    /* legacy messages ride on the event document; new ones live in the
+       messages subcollection and stream in while a detail view is open.
+       chatTail + chatCount on the doc keep previews and badges live
+       without streaming every thread to every viewer. */
+    messages: (d.chatMessages || []).map(function(m){ return msgFrom(m); }),
+    legacyMessages: (d.chatMessages || []).map(function(m){ return msgFrom(m); }),
+    legacyMsgCount: (d.chatMessages || []).length,
+    chatTail: d.chatTail ? msgFrom(d.chatTail) : null,
+    msgTotal: (d.chatMessages || []).length + (d.chatCount || 0),
     chatUnread: d.chatUnread || 0,
     guests: null, waiting: null, maybes: null, cants: null, photos: null, activity: null,
     requests: null
@@ -2385,7 +2317,8 @@ function markSeen(id, n){
   try{ localStorage.setItem(SEEN_KEY, JSON.stringify(SEEN)); }catch(e){}
 }
 function unseenCount(ev){
-  return Math.max(0, (ev.messages || []).length - (seenMap()[ev.id] || 0));
+  var total = ev.msgTotal != null ? ev.msgTotal : (ev.messages || []).length;
+  return Math.max(0, total - (seenMap()[ev.id] || 0));
 }
 
 /* An event is on your page only if you host it or one of your linked uids
@@ -2534,15 +2467,13 @@ function appCard(kind, host){
 function infoCard(){
   var m = loadMe(), st = authState(), fn = fname(m.name||''), live = smsLive();
   var tel = live ? toE164(m.phone) : m.phone;
-  var n = phoneVerified() ? linkedProfiles().length : 0;
   var pend = st!=='verified' && verifyPending();
   var stTitle = st==='verified' ? 'You’re '+h(fn)+' · verified'
               : pend && fn      ? 'You’re '+h(fn)+' · verification paused'
               : st==='named'    ? 'You’re '+h(fn)+' · this device only'
               :                   'You’re a guest right now';
   var stSub = st==='verified'
-      ? 'Every device that verifies '+h(tel)+' shares this account'+
-        (n?' · linked to '+n+' other'+(n===1?'':'s'):'')+'.'
+      ? 'Every device that verifies '+h(tel)+' signs into this same account.'
       : pend
       ? 'Texting is down on our side - your number is saved, and everything keeps working meanwhile.'
       : st==='named'
@@ -2873,6 +2804,8 @@ function renderEvent(id){
     : skel('Loading photos\u2026');
 
   var last = (ev.messages||[])[ (ev.messages||[]).length-1 ], unseen = unseenCount(ev);
+  /* before the thread streams in, the doc's chatTail is the freshest line */
+  if(ev.chatTail && (!last || (ev.chatTail.ms||0) > (last.ms||0))) last = ev.chatTail;
   var lastP = last && evProf(ev,last.fromUid,last.fromName,last.fromAvatarUrl);
   var chatBlock = last
     ? '<div class="chat-card"><div class="av-wrap">'+img(lastP.av,'')+
@@ -3198,7 +3131,9 @@ function renderGuests(id){
         '<small>'+(r.reqType==='invite' ? 'Suggested by '+h(r.byName?evName(ev,r.byName,r.byUid):'a guest')
                  : r.reqType==='remove' ? 'Removal asked by '+h(r.byName?evName(ev,r.byName,r.byUid):'a guest')
                  : 'Wants to join')+
-        (r.phone?' · '+h(r.phone):'')+'</small></div>'+
+        (function(){ /* the host-only contacts stream carries typed numbers */
+          var ph=r.phone||(ev.contactsMap&&ev.contactsMap[(r.name||'').toLowerCase()])||'';
+          return ph?' · '+h(ph):''; })()+'</small></div>'+
       '<span class="g-end">'+
         '<button class="gadd" type="button" data-rok="'+h(String(r.docId||i))+
           '" aria-label="Approve '+h(r.name)+'">'+ico('tick')+'</button>'+
@@ -3328,7 +3263,8 @@ function lightbox(ev,i){
 function renderChat(id){
   var ev=findEvent(id); if(!ev) return renderHome();
   var msgs=ev.messages||[];
-  markSeen(ev.id, msgs.length);        /* viewing the thread clears the badge */
+  /* viewing the thread clears the badge */
+  markSeen(ev.id, ev.msgTotal != null ? ev.msgTotal : msgs.length);
   var body = msgs.length
     ? '<div class="thread">'+msgs.map(function(m,mi){
         /* every bubble opens its options on tap - copy for anyone, edit for
@@ -4800,25 +4736,16 @@ function canJoin(ev){
 }
 /* spots already claimed by some OTHER visitor - row-keyed when the claiming
    row says WHICH spot it took (claimOf), name-keyed as the legacy fallback.
-   Sources: streamed guest rows (live) and every registry profile (local). */
+   A row with any visitor uid that isn't mine (and isn't the host's own row)
+   marks its spot taken. */
 function takenSpots(ev){
-  var m = loadMe(), uids = myUids(), rows = {}, names = {};
+  var uids = myUids(), rows = {}, names = {};
   [].concat(ev.guests || [], ev.maybes || [], ev.cants || [], ev.waiting || [])
     .forEach(function(g){
-      if(!(g.uid && /^u-/.test(g.uid)) || uids.indexOf(g.uid) > -1) return;
+      if(!g.uid || g.isHost || g.uid === ev.hostUid || uids.indexOf(g.uid) > -1) return;
       if(g.claimOf) rows[g.claimOf] = 1;
       else if(g.name) names[g.name.toLowerCase()] = 1;   /* pre-claimRow claim */
     });
-  var reg = regAll(), k;
-  for(k in reg){
-    if(k === m.uid) continue;
-    var cr = reg[k].claimRow || {};
-    var rid = cr[ev.id] || (ev.slug && cr[ev.slug]);
-    if(rid){ rows[rid] = 1; continue; }
-    var c = reg[k].claims || {};
-    var nm = c[ev.id] || (ev.slug && c[ev.slug]);
-    if(nm) names[nm.toLowerCase()] = 1;
-  }
   return { rows: rows, names: names };
 }
 function claimCard(ev){
@@ -4835,7 +4762,7 @@ function claimCard(ev){
       return '<button class="claim-row" type="button" data-claim="' + h(g.name) +
         '" data-claimrow="' + h(g.docId || '') + '">' +
         '<img src="' + h(g.avatarUrl || GAV) + '" alt="">' +
-        '<b>' + h(g.name) + '</b>' + (g.phone ? '<span>' + h(g.phone) + '</span>' : '') +
+        '<b>' + h(g.name) + '</b>' +
       '</button>';
     }).join('');
   return '<div class="modal-card claim" data-claimfor="' + h(ev.id) + '">' +
@@ -4925,18 +4852,28 @@ function finishCard(){
    stages without sending anything. */
 var VF = { stage: 'send' };
 function verifyCard(){
-  var m = loadMe(), k = phoneMatches().length, live = smsLive();
+  var m = loadMe(), live = smsLive();
   var tel = h(live ? toE164(m.phone) : m.phone);
-  var why = k ? 'is already on ' + k + ' other account' + (k === 1 ? '' : 's') + '. ' +
-                'Confirm it\u2019s yours, then choose which of them link into one'
-              : 'links your events across every device you use it on once it\u2019s verified';
   var head = '<div class="modal-card claim">' +
     '<button class="modal-x" type="button" data-modal-close aria-label="Close">' + ico('x') + '</button>' +
     '<div class="modal-ic">' + ico('lock') + '</div>' +
     '<h3 id="modal-h">Verify your number</h3>';
+  if(VF.stage === 'switch')
+    /* the number is already the claim on ANOTHER account. Switching is an
+       explicit choice, never automatic - and it signs this device into that
+       account rather than copying anything anywhere. */
+    return head +
+      '<p><b>' + tel + '</b> already belongs to a Down2Chill account - probably yours, from ' +
+        'another device.</p>' +
+      '<p class="fsub">Use it here and this device signs into that account - your events ' +
+        'from this device come along. Staying separate keeps this device its own guest ' +
+        'profile, and the number stays with the account that verified it.</p>' +
+      '<button class="modal-cta" type="button" data-switch-go>Use my existing account</button>' +
+      '<button class="modal-later" type="button" data-switch-no>Stay separate on this device</button>' +
+    '</div>';
   if(VF.stage === 'send')
     return head +
-      '<p><b>' + tel + '</b> ' + why + '.</p>' +
+      '<p><b>' + tel + '</b> links your events across every device you use it on once it\u2019s verified.</p>' +
       '<p class="fsub">' + (live
         ? 'Tap below and we\u2019ll text that number a one-time code (after a quick robot check - standard message rates apply). '
         : 'Demo build - no text is really sent. ') +
@@ -4949,79 +4886,18 @@ function verifyCard(){
     '<p>Enter the 6-digit code we texted to <b>' + tel + '</b>.</p>' +
     '<input class="inp vf" id="vf-code" type="text" inputmode="numeric" maxlength="6" ' +
       'autocomplete="one-time-code" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022">' +
-    '<button class="modal-cta" type="button" data-verify>' + (k ? 'Verify & Link' : 'Verify') + '</button>' +
+    '<button class="modal-cta" type="button" data-verify>Verify</button>' +
     (live ? '<button class="modal-later" type="button" id="vf-resend" data-sms-send>Resend the code</button>' : '') +
     '<button class="modal-later" type="button" data-modal-close>Not now</button>' +
     (live ? '' : '<p class="onote center">Demo: any 6 digits work.</p>') +
   '</div>';
 }
-/* candidates + current picks, set by finishLink before the sheet opens */
-var MERGE = { names: [], photos: [], name: '', photo: '' };
-function mergeCard(){
-  var nameSec = MERGE.names.length > 1
-    ? '<p class="mg-lab">Name</p>' + MERGE.names.map(function(o){
-        return '<button class="modal-cta pick' + (MERGE.name === o.v ? ' on' : '') + '" type="button" ' +
-          'data-mname="' + h(o.v) + '">' + h(o.v) +
-          '<span class="tagn">' + (o.mine ? 'new' : 'existing') + '</span></button>';
-      }).join('')
-    : '';
-  var photoSec = MERGE.photos.length
-    ? '<p class="mg-lab">Photo</p><div class="mg-avs">' + MERGE.photos.map(function(o, i){
-        return '<button class="mg-av' + (MERGE.photo === o.v ? ' on' : '') + '" type="button" ' +
-          'data-mphoto="' + i + '" aria-label="' + (o.mine ? 'Your photo' : 'Existing photo') + '">' +
-          '<img src="' + h(o.v) + '" alt=""></button>';
-      }).join('') +
-      '<button class="mg-av up" type="button" data-mupload aria-label="Upload a new photo">' +
-        ico('cam-plus') + '</button>' +
-      '</div>'
-    : '';
-  return '<div class="modal-card claim">' +
-    '<button class="modal-x" type="button" data-modal-close aria-label="Keep the most recent">' + ico('x') + '</button>' +
-    '<div class="modal-ic">' + ico('person') + '</div>' +
-    '<h3 id="modal-h">Make them one</h3>' +
-    '<p>Your linked accounts differ. Pick what everyone should see - skipping keeps the most recent.</p>' +
-    nameSec + photoSec +
-    '<button class="modal-cta go" type="button" data-mergego>Save</button>' +
-    '<button class="modal-later" type="button" data-modal-close>Skip - keep most recent</button>' +
-  '</div>';
-}
-/* post-2FA link chooser: every verified match waits here for a yes/no.
-   Switches default ON - a fresh number's new owner flips off what isn't theirs. */
-var LINKQ = { profs: [], on: {} };
-function linkCard(){
-  var n = LINKQ.profs.filter(function(p){ return LINKQ.on[p.uid]; }).length;
-  return '<div class="modal-card claim">' +
-    '<button class="modal-x" type="button" data-linklater aria-label="Decide later">' + ico('x') + '</button>' +
-    '<div class="modal-ic">' + ico('person') + '</div>' +
-    '<h3 id="modal-h">Number verified - link accounts?</h3>' +
-    '<p>Your number is on ' + (LINKQ.profs.length === 1 ? 'another account'
-        : LINKQ.profs.length + ' other accounts') + ' - maybe your other devices, maybe ' +
-      'whoever had the number before you. Link only what’s yours; switched-off ' +
-      'accounts stay separate.</p>' +
-    '<div class="lk-head"><p class="mg-lab">Accounts</p>' +
-      '<button class="lk-all" type="button" data-linkall>' +
-      (n === LINKQ.profs.length ? 'Turn all off' : 'Turn all on') + '</button></div>' +
-    '<div class="glist">' + LINKQ.profs.map(function(p){
-      var k = (p.events || []).length, on = !!LINKQ.on[p.uid];
-      return '<div class="grow"><span class="gav"><img src="' + h(p.photo || GAV) + '" alt=""></span>' +
-        '<span class="gtx"><b>' + h(p.name || 'Unnamed visitor') + '</b>' +
-        '<span>' + h(p.uid) + ' · ' + k + (k === 1 ? ' event' : ' events') + '</span></span>' +
-        '<button class="sw' + (on ? ' on' : '') + '" type="button" role="switch" aria-checked="' + on + '" ' +
-          'data-linktgl="' + h(p.uid) + '" aria-label="Link ' + h(p.name || 'this account') + '"><i></i></button>' +
-      '</div>';
-    }).join('') + '</div>' +
-    '<button class="modal-cta" type="button" data-linkgo>' +
-      (n ? 'Link ' + (n === 1 ? 'this account' : n + ' accounts') : 'Keep them separate') + '</button>' +
-    '<button class="modal-later" type="button" data-linklater>Decide later</button>' +
-  '</div>';
-}
 function renderProfile(){
-  var m = loadMe(), linked = linkedProfiles(), evs = myEvents().length, pend = linkPend().length;
-  var vnow = (!!normPhone(m.phone) && !phoneVerified() && smsLive()) || pend;
-  var vlab = pend ? 'Choose ' + pend + ' to link'
-           : linked.length || (!phoneVerified() && verifyPending() ? 'Verification paused'
-           : phoneMatches().length ? 'Verify to link ' + phoneMatches().length
-           : vnow ? 'Tap to verify' : 'None yet');
+  var m = loadMe(), evs = myEvents().length;
+  var vnow = !!normPhone(m.phone) && !phoneVerified();
+  var vlab = phoneVerified() ? 'This account' :
+             verifyPending() ? 'Verification paused' :
+             vnow ? 'Tap to verify' : 'Add a number first';
   return '<div class="wrap narrow">' +
     '<header class="top">' +
       '<a class="icon-btn" href="#home" data-back="home" aria-label="Back to events">' + ico('back') + '</a>' +
@@ -5047,23 +4923,18 @@ function renderProfile(){
       '<div class="srow noact"><span class="sic">' + ico('lock') + '</span><b>Status</b>' +
         '<span class="sval">' + (phoneVerified() ? 'Verified'
           : verifyPending() ? 'Verification paused' : 'Guest · this device') + '</span></div>' +
-      '<div class="srow noact"><span class="sic">' + ico('person') + '</span><b>Visitor ID</b>' +
+      '<div class="srow noact"><span class="sic">' + ico('person') + '</span><b>Account ID</b>' +
         '<span class="sval mono">' + h(m.uid) + '</span></div>' +
       '<div class="srow noact"><span class="sic">' + ico('cal-p') + '</span><b>Events opened</b>' +
         '<span class="sval">' + evs + '</span></div>' +
       '<div class="srow' + (vnow ? ' act" data-verifynow role="button" tabindex="0"' : ' noact"') +
-        '><span class="sic">' + ico('phone') + '</span><b>Linked accounts</b>' +
+        '><span class="sic">' + ico('phone') + '</span><b>Your number</b>' +
         '<span class="sval">' + vlab + '</span></div>' +
     '</div></section>' +
-    (linked.length ?
-      '<section class="sec"><div class="sec-h"><h2>Linked accounts</h2></div>' +
-      '<p class="fsub">These visitor ids share your phone number, so their events count as yours.</p>' +
-      '<div class="glist">' + linked.map(function(p){
-        var k = (p.events || []).length;
-        return '<div class="grow"><span class="gav"><img src="' + h(p.photo || GAV) + '" alt=""></span>' +
-          '<span class="gtx"><b>' + h(p.name || 'Unnamed visitor') + '</b>' +
-          '<span>' + h(p.uid) + ' \u00B7 ' + k + (k === 1 ? ' event' : ' events') + '</span></span></div>';
-      }).join('') + '</div></section>' : '') +
+    (phoneVerified() ?
+      '<section class="sec"><div class="sec-h"><h2>Your devices</h2></div>' +
+      '<p class="fsub">Verify ' + h(toE164(m.phone)) + ' on any other device and it signs ' +
+        'into this same account - no passwords, nothing to merge.</p></section>' : '') +
   '</div>';
 }
 
@@ -5471,10 +5342,7 @@ function eventDock(id){
     if(t.closest('[data-info]')){ openInfo(); return; }
     if(t.closest('[data-info-verify]')){ closeModal(); promptVerify(); return; }
     if(t.closest('[data-info-profile]')){ closeModal(); location.hash='#profile'; return; }
-    if(t.closest('[data-verifynow]')){
-      if(linkPend().length) promptLinkChoice(true); else promptVerify();
-      return;
-    }
+    if(t.closest('[data-verifynow]')){ promptVerify(); return; }
     if(t.closest('[data-mephoto]')){ pickMePhoto(); return; }
     if(t.closest('[data-mesave]')){
       saveMe(); propagateMe(); toast('Profile saved'); repaintProfile();
@@ -5588,52 +5456,39 @@ function eventDock(id){
       if(vb.disabled) return;
       var vo=vb.textContent;
       vb.disabled=true; vb.textContent='Checking…';
-      D2C.smsCheck(vv).then(function(tel){ smsVerified(tel); })
+      D2C.smsCheck(vv).then(function(res){ smsVerified(res); })
         .catch(function(e){
           vb.disabled=false; vb.textContent=vo;
           toast(smsErr(e),'err',5200);
         });
       return;
     }
-    var ltg=t.closest('[data-linktgl]');
-    if(ltg){
-      LINKQ.on[ltg.dataset.linktgl]=!LINKQ.on[ltg.dataset.linktgl];
-      linkSync(); return;
-    }
-    if(t.closest('[data-linkall]')){
-      var allOn=LINKQ.profs.every(function(p){ return LINKQ.on[p.uid]; });
-      LINKQ.profs.forEach(function(p){ LINKQ.on[p.uid]=!allOn; });
-      linkSync(); return;
-    }
-    if(t.closest('[data-linklater]')){ LINK_LATER=true; closeModal(); repaintMe(); return; }
-    if(t.closest('[data-linkgo]')){
-      var lm=loadMe();
-      LINKQ.profs.forEach(function(p){
-        var oi=lm.linkOks.indexOf(p.uid), ri=lm.linkRejects.indexOf(p.uid);
-        if(LINKQ.on[p.uid]){
-          if(oi<0) lm.linkOks.push(p.uid);
-          if(ri>-1) lm.linkRejects.splice(ri,1);
-        } else {
-          if(ri<0) lm.linkRejects.push(p.uid);
-          if(oi>-1) lm.linkOks.splice(oi,1);
-          lm.cloudLinked=(lm.cloudLinked||[]).filter(function(c){ return c.uid!==p.uid; });
+    var swg=t.closest('[data-switch-go]');
+    if(swg){
+      if(swg.disabled) return;
+      swg.disabled=true; swg.textContent='Switching…';
+      D2C.smsSwitch().then(function(res){
+        closeModal();
+        toast(res && res.name ? 'Welcome back, '+fname(res.name)+'!' : 'Signed into your account','top');
+        repaintMe(); remapRoles(); STORE.notify();
+      }).catch(function(e){
+        if(e && e.code==='auth/requires-recent-code'){
+          /* the one-time code was spent proving the number - text a fresh one
+             and confirm it straight into the existing account */
+          VF.stage='code'; modal.innerHTML=verifyCard();
+          toast('One more code to sign in - resend and enter it','',5200);
+          return;
         }
+        swg.disabled=false; swg.textContent='Use my existing account';
+        toast(smsErr(e),'err',5200);
       });
-      saveMe(); closeModal();
-      if(linkedProfiles().length) finishLink();
-      else { toast('Number verified - accounts kept separate'); repaintMe(); }
       return;
     }
-    var mnm=t.closest('[data-mname]');
-    if(mnm){ MERGE.name=mnm.dataset.mname; modal.innerHTML=mergeCard(); return; }
-    var mph=t.closest('[data-mphoto]');
-    if(mph){ MERGE.photo=(MERGE.photos[+mph.dataset.mphoto]||{}).v||''; modal.innerHTML=mergeCard(); return; }
-    if(t.closest('[data-mupload]')){ pickMergePhoto(); return; }
-    if(t.closest('[data-mergego]')){
-      applyMerge(MERGE.name, MERGE.photo);
+    if(t.closest('[data-switch-no]')){
       closeModal();
-      toast('Accounts linked as '+fname(loadMe().name||'you'));
-      repaintProfile(); return;
+      toast('Staying separate - this device keeps its own guest profile','',4500);
+      repaintMe();
+      return;
     }
     var rok=t.closest('[data-rok]');
     if(rok){ actRequest(rok.dataset.rok, true); return; }
@@ -6072,37 +5927,6 @@ function eventDock(id){
     var iv=document.getElementById('cv-in');
     if(iv){ iv.focus(); iv.select(); }
   }
-  /* patch the open chooser in place - re-rendering the card resets the
-     sheet's scroll, which yanked long lists back to the top on every flip */
-  function linkSync(){
-    var on=0;
-    modal.querySelectorAll('[data-linktgl]').forEach(function(b){
-      var v=!!LINKQ.on[b.dataset.linktgl];
-      if(v) on++;
-      b.classList.toggle('on',v); b.setAttribute('aria-checked',v);
-    });
-    var go=modal.querySelector('[data-linkgo]');
-    if(go) go.textContent = on ? 'Link '+(on===1?'this account':on+' accounts')
-                               : 'Keep them separate';
-    var all=modal.querySelector('[data-linkall]');
-    if(all) all.textContent = on===LINKQ.profs.length ? 'Turn all off' : 'Turn all on';
-  }
-  /* "Decide later" quiets the auto-reprompt for this pageload only - an
-     undecided match asks again next session (or via the profile row) */
-  var LINK_LATER=false;
-  promptLinkChoice = function(force){
-    /* cloud matches can land moments after 2FA, behind the photo follow-up -
-       the chooser may replace that nudge, but never any other sheet */
-    var busy = !modal.hidden && !modal.querySelector('[data-finish]');
-    if(busy || (LINK_LATER && !force)) return;
-    var pend=linkPend();
-    if(!pend.length) return;
-    LINKQ={ profs:pend, on:{} };
-    pend.forEach(function(p){ LINKQ.on[p.uid]=true; });
-    modal.innerHTML=linkCard(); modal.hidden=false;
-    document.body.classList.add('modal-open');
-    modalShown();
-  };
   promptVerify = function(){
     if(!modal.hidden) return;
     /* an SMS already on its way TO THIS NUMBER (sheet closed mid-flow)
@@ -6113,23 +5937,26 @@ function eventDock(id){
     document.body.classList.add('modal-open');
     modalShown();
   };
-  /* the code matched (or demo build): record the number Firebase actually
-     confirmed, then link any duplicates */
-  function smsVerified(tel){
-    var m=loadMe();
-    m.verifiedPhone = tel ? normPhone(tel) : normPhone(m.phone);
-    m.verifiedAt = Date.now();
+  /* the code matched. Three outcomes, all server-decided:
+       linked   - the claim landed on THIS account (same uid, upgraded in place)
+       updated  - the account already had a number; the claim moved to this one
+       existing - the number is the claim on ANOTHER account: nothing changed
+                  yet, the explicit switch chooser decides what happens next */
+  function smsVerified(res){
+    var m=loadMe(), mode=(res&&res.mode)||'linked', tel=(res&&res.phone)||toE164(m.phone);
+    if(mode==='existing'){
+      VF.stage='switch';
+      modal.innerHTML=verifyCard(); modal.hidden=false;
+      document.body.classList.add('modal-open');
+      modalShown(); return;
+    }
+    /* the token's number is the truth - mirror it into the profile field */
+    if(!smsLive()) window.AUTH_PHONE = AUTH_PHONE = tel;   /* demo pretend-claim */
+    m.phone = tel;
     m.verifyDeclined = '';
     m.verifyPending = ''; m.verifyPendingAt = 0;
-    LINK_LATER=false;   /* a fresh verification always gets the chooser */
     saveMe(); closeModal();
-    if(!phoneVerified()){   /* confirmed number != the one saved now */
-      toast('That code was for a different number - save again to re-verify','err',5200);
-      repaintMe(); return;
-    }
-    if(linkPend().length) promptLinkChoice(true);
-    else if(linkedProfiles().length) finishLink();
-    else { toast('Number verified'); repaintMe(); }
+    toast('Number verified'); repaintMe();
     /* verification replaced the old photo follow-up during signup */
     if(modal.hidden && !loadMe().photo){
       modal.innerHTML=finishCard(); modal.hidden=false;
@@ -6138,63 +5965,12 @@ function eventDock(id){
   }
   /* ask at most ONCE per number: a saved number that is neither verified nor
      skipped gets the consent sheet (changing the number resets both, so a new
-     number asks once again); a verified duplicate links straight away.
-     Offline demo only bothers when there is actually something to link. */
+     number asks once again). */
   function checkPhoneLink(){
     var m=loadMe();
-    if(!normPhone(m.phone)) return;
-    if(!phoneVerified()){
-      if(!verifyDeclined() && !verifyPending() && (smsLive() || phoneMatches().length)) promptVerify();
-      return;
-    }
-    if(linkPend().length) promptLinkChoice();
-    else if(linkedProfiles().length) finishLink();
-  }
-  /* verified: union the views, then settle on one name */
-  /* every linked account ends up with ONE name and ONE photo. The newest is
-     applied immediately, so closing or skipping the sheet already means
-     "keep the most recent" - the sheet only exists to override that. */
-  function applyMerge(name, photo){
-    if(name) commonizeName(name);
-    if(photo) commonizePhoto(photo);
-    saveMe(); propagateMe();
-    if(STORE.mode==='live' && window.D2C && D2C.renameLinked){
-      var mm=loadMe(), okc=(mm.cloudLinked||[]).filter(function(p){
-        return mm.linkOks.indexOf(p.uid)>-1 && linkFresh(p); });
-      D2C.renameLinked(okc, mm.name, mm.photo||'').catch(function(){});
-    }
-    remapRoles(); STORE.notify();
-  }
-  function finishLink(){
-    var m=loadMe();
-    var seenN={}, seenP={}, names=[], photos=[];
-    var profs=[m].concat(linkedProfiles())
-      .slice().sort(function(a,b){ return (b.at||0)-(a.at||0); });   /* newest first */
-    profs.forEach(function(p){
-      if(p.name && !seenN[p.name.toLowerCase()]){
-        seenN[p.name.toLowerCase()]=1; names.push({ v:p.name, mine:p.uid===m.uid });
-      }
-      if(p.photo && !seenP[p.photo]){
-        seenP[p.photo]=1; photos.push({ v:p.photo, mine:p.uid===m.uid });
-      }
-    });
-    /* accounts with no photo still offer their default face as an option,
-       ranked below every real photo so skipping never discards a real one */
-    profs.forEach(function(p){
-      if(p.photo) return;
-      var d=GAV;
-      if(!seenP[d]){ seenP[d]=1; photos.push({ v:d, mine:p.uid===m.uid, def:true }); }
-    });
-    applyMerge(names.length?names[0].v:'',
-               (photos.length && !photos[0].def) ? photos[0].v : '');
-    if(names.length>1 || photos.length>1){
-      MERGE={ names:names, photos:photos,
-              name:names.length?names[0].v:'', photo:photos.length?photos[0].v:'' };
-      modal.innerHTML=mergeCard(); modal.hidden=false;
-      document.body.classList.add('modal-open');
-    } else {
-      toast('Accounts linked'); repaintProfile();
-    }
+    if(!normPhone(m.phone) || phoneVerified()) return;
+    /* demo builds walk the same sheet without sending anything */
+    if(!verifyDeclined() && !verifyPending()) promptVerify();
   }
   /* a profile edit shows up everywhere this uid already appears - the host
      stamp, every guest list, the doc-riding chat, photos and the feed */
@@ -6240,24 +6016,6 @@ function eventDock(id){
     input.click();
   }
 
-  /* a brand-new photo, straight from the merge sheet */
-  function pickMergePhoto(){
-    var input=document.getElementById('face-input');
-    input.value='';
-    input.onchange=function(){
-      var f=input.files&&input.files[0];
-      if(!f) return;
-      if(!/^image\//.test(f.type)){ toast('That file isn\u2019t an image.','err'); return; }
-      shrinkImage(f,192,function(url){
-        if(!url){ toast('Could not read that image.','err'); return; }
-        MERGE.photos=MERGE.photos.filter(function(p){ return !p.up; });
-        MERGE.photos.unshift({ v:url, mine:true, up:true });
-        MERGE.photo=url;
-        modal.innerHTML=mergeCard();
-      });
-    };
-    input.click();
-  }
 
   /* ---------- claiming a spot on a public event ---------- */
   var claimShown={}, pendingRsvp=null, pendingName=null;
@@ -6428,7 +6186,9 @@ function eventDock(id){
         if(rowId ? g.docId===rowId : g.name===name) src=g;
       });
       if(src){
-        if(src.phone && !m.phone) m.phone=src.phone;
+        /* the host-typed phone hint is data ABOUT you, not identity - it is
+           never copied into your profile; only a number you type yourself
+           (and then verify) touches identity */
         /* never adopt a generated stand-in (grey person, letter tile) as a
            real photo - those are data-URI svgs; real photos never are */
         if(src.avatarUrl && src.avatarUrl.indexOf('data:image/svg')!==0 && !m.photo)
@@ -6445,11 +6205,10 @@ function eventDock(id){
       var pb=document.querySelector('#rsvp button[data-k="'+pr.k+'"]');
       if(pb) rsvp(pb);
     }
-    /* an adopted number that duplicates an existing account links right away
-       (behind the 2FA-style check); otherwise offer the photo/phone follow-up */
+    /* a saved but unverified number gets the consent sheet; otherwise offer
+       the photo/phone follow-up */
     var m2=loadMe();
-    if(normPhone(m2.phone) && !phoneVerified() && !verifyDeclined() && !verifyPending() &&
-       (phoneMatches().length || smsLive())){
+    if(normPhone(m2.phone) && !phoneVerified() && !verifyDeclined() && !verifyPending()){
       promptVerify();
     } else if(!m2.phone || !m2.photo){
       modal.innerHTML=finishCard(); modal.hidden=false;
@@ -7213,15 +6972,16 @@ function eventDock(id){
     jump(y);
   });
 
-  /* the other device keeps opening events after we linked - pull the fresh
-     union when the app boots and whenever this tab comes back into view */
+  /* another device may edit the shared profile while this tab is hidden -
+     re-hydrate from people/{uid} when the tab comes back into view */
   var lastSync=0;
   function syncLinks(){
     refreshMe();   /* a stale copy must adopt newer state, not re-save itself */
-    if(STORE.mode!=='live' || !phoneVerified()) return;
+    if(STORE.mode!=='live') return;
     var now=Date.now();
     if(now-lastSync<60000) return;
-    lastSync=now; saveMe();
+    lastSync=now;
+    if(window.D2C && D2C.pullProfile) D2C.pullProfile().catch(function(){});
   }
   STORE.onChange(function(){ if(STORE.mode==='live') syncLinks(); });
   document.addEventListener('visibilitychange',function(){
@@ -7354,32 +7114,40 @@ async function initFirebase(){
   const storage = st.getStorage(app);
   const auth    = au.getAuth(app);
 
-  // Sign-in is optional - it only matters when rules require request.auth.
-  // Reuse whoever is already signed in (a phone-verified user survives
-  // reloads) and only fall back to a fresh anonymous session.
+  // Identity IS the auth session: the server-minted uid keys every record,
+  // and the phone number on the token is the verified claim. Reuse whoever
+  // is already signed in (auth persists in IndexedDB, outliving cleared
+  // localStorage) and only fall back to a fresh anonymous session.
   let uid = null;
   try {
     await new Promise(res => { const un = au.onAuthStateChanged(auth, () => { un(); res(); }); });
     const u = auth.currentUser || (await au.signInAnonymously(auth)).user;
     uid = u.uid;
     dim("signed in as " + (u.phoneNumber || "anon " + uid.slice(0, 10) + "\u2026"));
-    /* cleared site data forgets verifiedPhone, but the phone user often
-       survives - re-hydrate the flag instead of costing another SMS */
-    if(u.phoneNumber && window.loadMe && window.normPhone){
-      const m = loadMe();
-      if(m.phone && normPhone(m.phone) === normPhone(u.phoneNumber) &&
-         m.verifiedPhone !== normPhone(m.phone)){
-        m.verifiedPhone = normPhone(m.phone);
-        try{ localStorage.setItem("d2c.me.v1", JSON.stringify(m)); }catch(e){}
-      }
-    }
   } catch(e){
     warn("auth unavailable (" + e.code + ") - continuing unauthenticated");
   }
   if(!uid) authDown();
 
   fb = { app, db, storage, auth, au, uid, fs, st };
+  /* keep the classic script's view of "who am I" pinned to the token */
+  au.onAuthStateChanged(auth, u => {
+    fb.uid = u ? u.uid : null;
+    if(u && window.adoptAuthUid) adoptAuthUid(u.uid, u.phoneNumber || "");
+  });
+  if(auth.currentUser && window.adoptAuthUid)
+    adoptAuthUid(auth.currentUser.uid, auth.currentUser.phoneNumber || "");
+  /* localStorage is only a cache - people/{uid} is the record. Pull it once
+     per boot so cleared storage (or a fresher edit from another device)
+     costs nothing. Best-effort: offline boots just use the cache. */
+  pullProfile().catch(() => {});
   return fb;
+}
+async function pullProfile(){
+  if(!fb || !fb.uid) return;
+  const { db, fs } = fb;
+  const snap = await fs.getDoc(fs.doc(db, ...FS_ROOT, "people", fb.uid)).catch(() => null);
+  if(snap && snap.exists() && window.hydrateProfile) hydrateProfile(snap.data());
 }
 /* signed-out clients fail every write under the rules - say so loudly ONCE
    instead of letting each action die with a cryptic permission error */
@@ -7539,21 +7307,34 @@ async function createEvent(draft){
   if(hu) data.hostAuthUid = hu;
   data.hostPhone   = (fb.auth.currentUser && fb.auth.currentUser.phoneNumber) || "";
 
+  /* a phone number typed about an invitee is the HOST's contact hint - it
+     goes in the host-only contacts subcollection, never on the event doc
+     every viewer streams and never onto guest rows every guest can read */
+  const invited = invitedList(draft);
+  data.invitedGuests = invited.map(g =>
+    ({ uid: g.uid, name: g.name, avatarUrl: g.avatarUrl, source: g.source }));
+
   await fs.setDoc(evRef, data);
-  await fs.setDoc(fs.doc(fs.collection(evRef, "guests")), {
+  /* the host's own row is keyed by their uid, same as every self-authored
+     row - re-answering merges instead of piling up */
+  await fs.setDoc(fs.doc(evRef, "guests", me.fsId || "host"), {
     uid: me.fsId || "", name: me.name, avatarUrl: me.av, message: "",
     invitedLabel: "Just now", isHost: true, isYou: true, status: "going",
     authUid: authUid(),
     order: Date.now(), source: "created"
   });
   /* everyone picked on step 4 starts as a pending guest */
-  const invited = invitedList(draft);
   await Promise.all(invited.map((g, i) =>
     fs.setDoc(fs.doc(fs.collection(evRef, "guests")), {
-      uid: g.uid, name: g.name, avatarUrl: g.avatarUrl, phone: g.phone, message: "",
+      uid: g.uid, name: g.name, avatarUrl: g.avatarUrl, message: "",
       invitedLabel: "Just now", isHost: false, isYou: false, status: "pending",
       order: Date.now() + i + 1, source: g.source
     })));
+  await Promise.all(invited.filter(g => g.phone).map(g =>
+    fs.setDoc(fs.doc(fs.collection(evRef, "contacts")), {
+      name: g.name, phone: window.toE164 ? toE164(g.phone) : g.phone,
+      byAuthUid: authUid(), at: fs.serverTimestamp()
+    }).catch(() => {})));   /* best-effort: a refused hint never fails the event */
   await fs.setDoc(fs.doc(fs.collection(evRef, "activity")), {
     personUid: me.fsId || "", personName: me.name, personAvatarUrl: me.av,
     icon: "check", isCheck: true,
@@ -7589,6 +7370,14 @@ function msgIndex(arr, m){
 async function deleteMessage(eventId, m){
   const { db, fs } = await initFirebase();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
+  /* subcollection messages are their own docs; the rules let the author or
+     the host delete exactly that doc */
+  if(m.id){
+    await fs.deleteDoc(fs.doc(evRef, "messages", m.id));
+    await fs.updateDoc(evRef, { chatCount: fs.increment(-1) }).catch(() => {});
+    if(m.imagePath) deleteFile(m.imagePath);
+    return;
+  }
   const snap = await fs.getDoc(evRef);
   const arr = (snap.data() || {}).chatMessages || [];
   const hit = msgIndex(arr, m);
@@ -7601,6 +7390,10 @@ async function deleteMessage(eventId, m){
 async function editMessage(eventId, m, text){
   const { db, fs } = await initFirebase();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
+  if(m.id){
+    await fs.updateDoc(fs.doc(evRef, "messages", m.id), { text: text, edited: true });
+    return;
+  }
   const snap = await fs.getDoc(evRef);
   const arr = (snap.data() || {}).chatMessages || [];
   const hit = msgIndex(arr, m);
@@ -7644,7 +7437,7 @@ async function deleteEvent(id){
   try { const snap = await fs.getDoc(evRef); cover = (snap.data() || {}).coverPath || ""; }
   catch(e){ /* the doc may already be gone */ }
 
-  for(const sub of ["guests", "photos", "activity"]){
+  for(const sub of ["guests", "photos", "activity", "messages", "contacts"]){
     const snap = await fs.getDocs(fs.collection(evRef, sub));
     await Promise.all(snap.docs.map(d => fs.deleteDoc(d.ref)));
   }
@@ -7659,22 +7452,6 @@ async function deleteEvent(id){
     catch(e){ warn("cover not removed (" + (e.code || e.message) + ")"); }
   }
   ok("event deleted: " + FS_ROOT.join("/") + "/events/" + id);
-}
-
-/* ---------------- one name across linked accounts ---------------- */
-async function renameLinked(profiles, name, photo){
-  const { db, fs } = await initFirebase();
-  const vPatch = photo ? { name, photo } : { name };
-  for(const p of profiles){
-    await fs.setDoc(fs.doc(db, ...FS_ROOT, "visitors", p.uid), vPatch, { merge: true });
-    const evs = await fs.getDocs(fs.query(
-      fs.collection(db, ...FS_ROOT, "events"), fs.where("hostUid", "==", p.uid)));
-    const ids = {}; evs.docs.forEach(d => { ids[d.id] = 1; });
-    Object.keys(p.rsvp || {}).forEach(id => { ids[id] = 1; });
-    (p.events || []).forEach(id => { ids[id] = 1; });
-    await pushIdentity(p.uid, name, photo || null, ids, evs.docs);
-  }
-  ok("profile commonized across " + profiles.length + " linked account(s)");
 }
 
 /* ---------------- how many extras a guest brings ---------------- */
@@ -7736,10 +7513,16 @@ async function inviteGuests(eventId, list){
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
   await Promise.all(list.map((g, i) =>
     fs.setDoc(fs.doc(fs.collection(evRef, "guests")), {
-      uid: "", name: g.name, avatarUrl: GAV, phone: g.phone || "", message: "",
+      uid: "", name: g.name, avatarUrl: GAV, message: "",
       invitedLabel: "Just now", isHost: false, isYou: false, status: "pending",
       authUid: authUid(), order: Date.now() + i, source: "invite"
     })));
+  /* typed numbers go to the host-only contacts store, never onto rows */
+  await Promise.all(list.filter(g => g.phone).map(g =>
+    fs.setDoc(fs.doc(fs.collection(evRef, "contacts")), {
+      name: g.name, phone: window.toE164 ? toE164(g.phone) : g.phone,
+      byAuthUid: authUid(), at: fs.serverTimestamp()
+    }).catch(() => {})));
   await fs.updateDoc(evRef, { "counts.pending": fs.increment(list.length) });
   logActivity(eventId, "users",
     list.length === 1 ? "invited " + list[0].name : "invited " + list.length + " friends");
@@ -7776,7 +7559,6 @@ async function requestJoin(eventId, name){
   const me = meIdent();
   await fs.setDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "guests", me.fsId || "anon"), {
     uid: me.fsId || "", name: name, avatarUrl: me.av,
-    phone: (window.loadMe ? normPhone(loadMe().phone) : "") || "",
     message: "", invitedLabel: "Asked to join", isHost: false, isYou: false,
     status: "request", reqType: "join", authUid: authUid(), order: Date.now(), source: "request"
   }, { merge: true });
@@ -7787,12 +7569,17 @@ async function suggestInvites(eventId, list, byName){
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
   await Promise.all(list.map((g, i) =>
     fs.setDoc(fs.doc(fs.collection(evRef, "guests")), {
-      uid: "", name: g.name, avatarUrl: GAV, phone: g.phone || "", message: "",
+      uid: "", name: g.name, avatarUrl: GAV, message: "",
       invitedLabel: "Suggested by " + byName, isHost: false, isYou: false,
       status: "request", reqType: "invite", byName: byName, byUid: me.fsId || "",
       authUid: authUid(),
       order: Date.now() + i, source: "request"
     })));
+  await Promise.all(list.filter(g => g.phone).map(g =>
+    fs.setDoc(fs.doc(fs.collection(evRef, "contacts")), {
+      name: g.name, phone: window.toE164 ? toE164(g.phone) : g.phone,
+      byAuthUid: authUid(), at: fs.serverTimestamp()
+    }).catch(() => {})));
 }
 /* a guest privately asks the host to remove someone. The request doc carries
    the TARGET's uid, so if the host later bans that person by any route, the
@@ -7886,7 +7673,15 @@ async function banGuest(eventId, uid, name, erase){
      hold rows under more than one visitor id (second device, relinked phone) */
   const uids = {}; uids[uid] = 1;
   dead.forEach(d => { const u = d.data().uid; if(u) uids[u] = 1; });
+  /* bannedAuth is what the RULES enforce (get/read denies) - collect the
+     auth uids from their rows; banned stays for client-side filtering of
+     legacy visitor ids */
+  const authUids = {};
+  Object.keys(uids).forEach(u => { if(!/^u-/.test(u)) authUids[u] = 1; });
+  dead.forEach(d => { const a = d.data().authUid; if(a) authUids[a] = 1; });
   const patch = { banned: fs.arrayUnion.apply(null, Object.keys(uids)) };
+  if(Object.keys(authUids).length)
+    patch.bannedAuth = fs.arrayUnion.apply(null, Object.keys(authUids));
   Object.keys(cut).forEach(s => { patch["counts." + s] = fs.increment(-cut[s]); });
   await fs.updateDoc(evRef, patch);
   /* their +N leaves via the guests-stream heal (the host is on the guests
@@ -7927,6 +7722,10 @@ async function wipeGuestContent(evRef, fs, uid){
     fs.updateDoc(evRef, { photoCount: fs.increment(-got.length) }).catch(() => {});
   });
   await zap("activity", "personUid", null);
+  await zap("messages", "fromUid", got => {
+    got.forEach(d => { const p = d.data().imagePath; if(p) deleteFile(p); });
+    fs.updateDoc(evRef, { chatCount: fs.increment(-got.length) }).catch(() => {});
+  });
   return denied;
 }
 
@@ -8021,6 +7820,19 @@ async function setRsvp(eventId, status, prev, wasReq){
   const claimOf = (window.loadMe && (loadMe().claimRow || {})[eventId]) || "";
   if(claimOf) row.claimOf = claimOf;
   await fs.setDoc(fs.doc(evRef, "guests", me.fsId || "anon"), row, { merge: true });
+  /* rows left under a uid I used to hold (pre-auth local id, pre-switch
+     guest account) fold into this answer - their authUid is mine, so the
+     rules let me clear my own leftovers. Best-effort. */
+  try {
+    const prevs = (window.myUids ? myUids() : []).filter(u => u && u !== me.fsId);
+    await Promise.all(prevs.map(async u => {
+      await fs.deleteDoc(fs.doc(evRef, "guests", u)).catch(() => {});
+      const gs = await fs.getDocs(fs.query(fs.collection(evRef, "guests"),
+        fs.where("uid", "==", u))).catch(() => null);
+      if(gs) await Promise.all(gs.docs.map(d =>
+        fs.deleteDoc(d.ref).catch(() => {})));
+    }));
+  } catch(e){}
   const inc = {};
   inc["counts." + status] = fs.increment(1);
   if(prev && prev !== status) inc["counts." + prev] = fs.increment(-1);
@@ -8052,29 +7864,32 @@ async function absorbPending(eventId, name, keepId){
   if(dead.length) await fs.updateDoc(evRef, { "counts.pending": fs.increment(-dead.length) });
 }
 
-/* ---------------- 6. visitor profiles ---------------- */
+/* ---------------- 6. the profile record ----------------
+   people/{uid} is the source of truth for who this account is - owner-only
+   read and write under the rules, keyed by the auth uid alone. There is no
+   phone-keyed lookup anywhere: the phone lives on the auth token, and other
+   people's profiles are simply not readable. */
 async function saveProfile(p){
   const { db, fs } = await initFirebase();
-  await fs.setDoc(fs.doc(db, ...FS_ROOT, "visitors", p.uid),
+  const uid = authUid();
+  if(!uid || p.uid !== uid) return;   /* never write under an id the server didn't mint */
+  await fs.setDoc(fs.doc(db, ...FS_ROOT, "people", uid),
     Object.assign({}, p, { updatedAt: fs.serverTimestamp() }), { merge: true });
-}
-async function findByPhone(phone){
-  /* rules only let the VERIFIED owner of a number run this query - before
-     verification (or on a mismatched number) it denies, which just means
-     "no linkable profiles yet" */
-  try {
-    const { db, fs } = await initFirebase();
-    const snap = await fs.getDocs(fs.query(
-      fs.collection(db, ...FS_ROOT, "visitors"), fs.where("phone", "==", phone)));
-    return snap.docs.map(d => d.data());
-  } catch(e){ return []; }
 }
 
 /* ---------------- 7. SMS phone check (Firebase Phone Auth) ----------------
    Runs entirely in the browser - Firebase texts the code and verifies it,
    no Cloud Function anywhere. Needs the Phone provider + billing enabled
-   in the Firebase console; the invisible reCAPTCHA proves a human asked. */
-let smsConf = null, smsCap = null, smsTo = "";
+   in the Firebase console; the invisible reCAPTCHA proves a human asked.
+
+   The code NEVER swaps who you are by itself:
+     - fresh number  -> linkWithCredential upgrades THIS account in place
+                        (same uid, the number becomes a claim on its token)
+     - changed number-> updatePhoneNumber moves the claim, same uid again
+     - number already the claim on ANOTHER account -> nothing happens until
+       the person explicitly chooses "use my existing account" (smsSwitch) */
+let smsVerifId = null, smsCap = null, smsTo = "";
+let smsSwitchCred = null, smsWantSwitch = false;
 async function smsSend(e164){
   const { auth, au } = await initFirebase();
   /* a solved reCAPTCHA token is single-use, so rebuild the widget per send */
@@ -8084,27 +7899,125 @@ async function smsSend(e164){
   host = document.createElement("div"); host.id = "sms-captcha";
   document.body.appendChild(host);
   smsCap = new au.RecaptchaVerifier(auth, host, { size: "invisible" });
-  smsConf = await au.signInWithPhoneNumber(auth, e164, smsCap);
+  const provider = new au.PhoneAuthProvider(auth);
+  smsVerifId = await provider.verifyPhoneNumber(e164, smsCap);
   smsTo = e164;
 }
 async function smsCheck(code){
-  if(!smsConf) throw { code: "auth/code-expired", message: "no code was sent" };
-  /* Confirming swaps the signed-in user (anon -> phone), which would orphan
-     events this device hosted under the anon uid. While we are STILL that
-     anon host, stamp the number being verified onto our events so the rules'
-     hostPhone door stays open across the switch. Best-effort. */
+  if(!smsVerifId) throw { code: "auth/code-expired", message: "no code was sent" };
+  const { auth, au } = fb;
+  const cred = au.PhoneAuthProvider.credential(smsVerifId, code);
+  /* an earlier round already proved the number belongs to another account
+     and the person said "use it" - this fresh code signs straight in */
+  if(smsWantSwitch){
+    smsVerifId = null; smsAbort();
+    return doSwitch(cred);
+  }
+  const user = auth.currentUser;
   try {
-    const { db, fs, auth } = fb;
-    if(auth.currentUser && !auth.currentUser.phoneNumber){
-      const mine = await fs.getDocs(fs.query(fs.collection(db, ...FS_ROOT, "events"),
-        fs.where("hostAuthUid", "==", auth.currentUser.uid)));
-      await Promise.all(mine.docs.map(d => fs.updateDoc(d.ref, { hostPhone: smsTo }).catch(() => {})));
+    if(user && user.phoneNumber && user.phoneNumber !== smsTo){
+      await au.updatePhoneNumber(user, cred);     /* claim moves, uid stays */
+      smsVerifId = null; smsAbort();
+      return { mode: "updated", phone: auth.currentUser.phoneNumber || smsTo };
+    }
+    await au.linkWithCredential(user, cred);      /* anon -> verified, SAME uid */
+    smsVerifId = null; smsAbort();
+    return { mode: "linked", phone: auth.currentUser.phoneNumber || smsTo };
+  } catch(e){
+    if(e.code === "auth/credential-already-in-use" ||
+       e.code === "auth/account-exists-with-different-credential"){
+      /* the number is the claim on ANOTHER account (this person's other
+         device, usually). Nothing switches without an explicit yes. */
+      smsVerifId = null; smsAbort();
+      smsSwitchCred = (au.PhoneAuthProvider.credentialFromError &&
+                       au.PhoneAuthProvider.credentialFromError(e)) || cred;
+      return { mode: "existing", phone: smsTo };
+    }
+    if(e.code === "auth/provider-already-linked"){
+      /* token already carries this exact number - treat as verified */
+      smsVerifId = null; smsAbort();
+      return { mode: "linked", phone: (user && user.phoneNumber) || smsTo };
+    }
+    throw e;   /* wrong guess -> auth/invalid-verification-code, etc */
+  }
+}
+/* the explicit, consented switch to the account that owns the number.
+   Order matters: while STILL the guest account we stamp the proven number
+   onto events we host (the rules' hostPhone door stays open across the
+   switch) and lift our own guest rows; then we sign in; then rows and host
+   stamps are re-homed under the account we joined. Data moves by reference
+   to the new principal - the old account's record stays where it was. */
+async function doSwitch(cred){
+  const { auth, au, db, fs } = fb;
+  if(!smsSwitchCred && !cred){
+    /* nothing stashed (page reloaded between rounds) - one more code */
+    smsWantSwitch = true;
+    throw { code: "auth/requires-recent-code", message: "one more code needed" };
+  }
+  const old = auth.currentUser, oldUid = old ? old.uid : "";
+  const m = window.loadMe ? loadMe() : { events: [] };
+  let hosted = [], rows = [];
+  if(oldUid){
+    try {
+      const evs = await fs.getDocs(fs.query(
+        fs.collection(db, ...FS_ROOT, "events"), fs.where("hostAuthUid", "==", oldUid)));
+      hosted = evs.docs.map(d => d.id);
+      await Promise.all(evs.docs.map(d =>
+        fs.updateDoc(d.ref, { hostPhone: smsTo }).catch(() => {})));
+    } catch(e){}
+    await Promise.all((m.events || []).map(async id => {
+      try {
+        const ref = fs.doc(db, ...FS_ROOT, "events", id, "guests", oldUid);
+        const s = await fs.getDoc(ref);
+        if(s.exists()){ rows.push({ id: id, data: s.data() }); await fs.deleteDoc(ref); }
+      } catch(e){}
+    }));
+  }
+  let credRes;
+  try { credRes = await au.signInWithCredential(auth, smsSwitchCred || cred); }
+  catch(e){
+    /* the stashed credential was spent proving the number - put the lifted
+       rows back and ask for one more code that signs straight in */
+    await Promise.all(rows.map(r =>
+      fs.setDoc(fs.doc(db, ...FS_ROOT, "events", r.id, "guests", oldUid), r.data)
+        .catch(() => {})));
+    if(e.code === "auth/invalid-verification-code" || e.code === "auth/code-expired" ||
+       e.code === "auth/invalid-credential" || e.code === "auth/missing-verification-id"){
+      smsWantSwitch = true;
+      throw { code: "auth/requires-recent-code", message: "one more code needed" };
+    }
+    throw e;
+  }
+  smsWantSwitch = false; smsSwitchCred = null;
+  const user = credRes.user;
+  fb.uid = user.uid;
+  if(window.adoptAuthUid) adoptAuthUid(user.uid, user.phoneNumber || "");
+  /* re-home the lifted guest rows under the account's uid */
+  await Promise.all(rows.map(r =>
+    fs.setDoc(fs.doc(db, ...FS_ROOT, "events", r.id, "guests", user.uid),
+      Object.assign({}, r.data, { uid: user.uid, authUid: user.uid }), { merge: true })
+      .catch(() => {})));
+  /* hosted events follow - the phone claim on the token opens their
+     hostPhone door, so this update is authorized */
+  await Promise.all(hosted.map(id =>
+    fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", id),
+      { hostAuthUid: user.uid, hostUid: user.uid }).catch(() => {})));
+  /* the account's own name and photo win - joining it must not rewrite it */
+  let name = "";
+  try {
+    const snap = await fs.getDoc(fs.doc(db, ...FS_ROOT, "people", user.uid));
+    if(snap.exists() && window.hydrateProfile){
+      const doc = snap.data();
+      hydrateProfile(doc);
+      const m2 = loadMe();
+      if(doc.name)  m2.name  = doc.name;
+      if(doc.photo) m2.photo = doc.photo;
+      name = m2.name || "";
+      if(window.saveMe) saveMe();
     }
   } catch(e){}
-  const cred = await smsConf.confirm(code);   // wrong guess -> auth/invalid-verification-code
-  smsConf = null;                             // the right code also signs the phone user in
-  smsAbort();                                 // widget done - take the badge with it
-  return cred.user.phoneNumber;
+  connectLive();   /* re-stream under the new principal */
+  return { name: name };
 }
 /* remove the reCAPTCHA widget + badge; any sent code stays confirmable */
 function smsAbort(){
@@ -8113,8 +8026,70 @@ function smsAbort(){
   if(h) h.remove();
 }
 
-/* ---------------- live data ---------------- */
-let unsubEvents = null, unsubDetail = [], watchingId = null;
+/* ---------------- live data ----------------
+   Data minimization: nobody streams the whole events collection. Three
+   narrow sources feed one union -
+     pub   public events in the date window (the Discover rail)
+     host  events whose hostAuthUid is me
+     id    one doc-listener per event I joined or opened by link
+   The rules mirror this: list is only answerable for public/mine queries,
+   direct links go through per-doc get. */
+let unsubDetail = [], watchingId = null;
+let unsubPub = null, unsubHost = null, idWatch = {};
+const SRC = { pub: {}, host: {}, id: {} };
+let rebuildT = null;
+
+function scheduleRebuild(){
+  if(rebuildT) return;
+  rebuildT = setTimeout(() => {
+    rebuildT = null;
+    const seen = {}, out = [];
+    ["id", "host", "pub"].forEach(k => Object.keys(SRC[k]).forEach(eid => {
+      if(seen[eid]) return;
+      seen[eid] = 1; out.push(docToModel(eid, SRC[k][eid]));
+    }));
+    if(STORE.mode !== "live" && window.goLiveClock) goLiveClock();
+    STORE.setEvents(out, "live");
+    // re-attach the open detail view - dropping the old listeners first;
+    // stacking them multiplied reads and snapshot callbacks per update
+    if(watchingId){ stopDetail(); watchDetail(watchingId); }
+  }, 40);
+}
+function applySnap(kind, snap){
+  const now = {};
+  snap.docs.forEach(d => { now[d.id] = d.data(); });
+  SRC[kind] = now;
+  scheduleRebuild();
+}
+/* one listener per event I belong to - never the whole collection */
+function watchMine(){
+  if(!fb || !window.myEvents) return;
+  const { db, fs } = fb;
+  const want = {};
+  myEvents().forEach(id => { want[id] = 1; });
+  if(window.loadMe) Object.keys(loadMe().rsvp || {}).forEach(id => { want[id] = 1; });
+  Object.keys(want).forEach(id => {
+    if(idWatch[id] || !/^[A-Za-z0-9_-]{1,80}$/.test(id)) return;
+    idWatch[id] = fs.onSnapshot(fs.doc(db, ...FS_ROOT, "events", id),
+      s => { if(s.exists()) SRC.id[s.id] = s.data(); else delete SRC.id[s.id];
+             scheduleRebuild(); },
+      e => { dim("event " + id + ": " + e.code); });   /* gone or banned: not visible */
+  });
+}
+/* a direct link to an event none of the streams carry - fetch just that doc */
+async function ensureEvent(id){
+  if(!KEY_OK) return;
+  if(SRC.id[id] || SRC.pub[id] || SRC.host[id] || idWatch[id]) return;
+  if(!/^[A-Za-z0-9_-]{1,80}$/.test(id)) return;
+  try {
+    const { db, fs } = await initFirebase();
+    if(idWatch[id]) return;
+    idWatch[id] = fs.onSnapshot(fs.doc(db, ...FS_ROOT, "events", id),
+      s => { if(s.exists()) SRC.id[s.id] = s.data(); else delete SRC.id[s.id];
+             scheduleRebuild(); },
+      e => { dim("event " + id + ": " + e.code); });
+  } catch(e){}
+}
 
 async function connectLive(){
   if(!KEY_OK){
@@ -8123,26 +8098,38 @@ async function connectLive(){
       : "Firebase not configured - showing bundled sample data.");
     return;
   }
-  if(unsubEvents){ try{ unsubEvents(); }catch(e){} unsubEvents = null; }
+  [unsubPub, unsubHost].forEach(u => { if(u){ try{ u(); }catch(e){} } });
+  unsubPub = unsubHost = null;
+  Object.keys(idWatch).forEach(k => { try{ idWatch[k](); }catch(e){} delete idWatch[k]; });
+  SRC.pub = {}; SRC.host = {}; SRC.id = {};
   try {
-    const { db, fs } = await initFirebase();
-    // Events from the last ~6 weeks onward, ordered by date. Without the
-    // window every event ever created streams to every visitor forever.
+    const { db, fs, uid } = await initFirebase();
+    // Public events from the last ~6 weeks onward (needs the composite
+    // index join+dateISO - see the setup notes).
     const since = isoOf(new Date(Date.now() - 45 * 86400000));
-    unsubEvents = fs.onSnapshot(
+    unsubPub = fs.onSnapshot(
       fs.query(fs.collection(db, ...FS_ROOT, "events"),
+        fs.where("join", "==", "public"),
         fs.where("dateISO", ">=", since), fs.orderBy("dateISO")),
       snap => {
-        if(STORE.mode !== "live" && window.goLiveClock) goLiveClock();   // real clock from the first live paint
-        STORE.setEvents(snap.docs.map(d => docToModel(d.id, d.data())), "live");
-        dim("events snapshot: " + snap.size + " docs" +
-            (snap.metadata.fromCache ? " (cache)" : ""));
-        // re-attach if the doc set changed - dropping the old listeners first;
-        // stacking them multiplied reads and snapshot callbacks per update
-        if(watchingId){ stopDetail(); watchDetail(watchingId); }
+        applySnap("pub", snap);
+        dim("public events: " + snap.size + (snap.metadata.fromCache ? " (cache)" : ""));
       },
-      e => { err("events listener: " + e.code); useLocalData("Firestore read failed (" + e.code + ")."); }
+      e => {
+        err("public listener: " + e.code);
+        /* only surrender to bundled data when NO live source is delivering -
+           a missing composite index must not blank out my own events */
+        if(STORE.mode !== "live")
+          useLocalData("Firestore read failed (" + e.code + ").");
+      }
     );
+    if(uid) unsubHost = fs.onSnapshot(
+      fs.query(fs.collection(db, ...FS_ROOT, "events"),
+        fs.where("hostAuthUid", "==", uid)),
+      snap => applySnap("host", snap),
+      e => err("host listener: " + e.code)
+    );
+    watchMine();
   } catch(e){
     useLocalData("Firebase init failed: " + e.message);
   }
@@ -8241,6 +8228,31 @@ async function watchDetail(id){
                at: a.at || (a.order > 1e12 ? new Date(a.order).toISOString() : ""),
                quote: /^[\u201C"]/.test(a.text || "") };
     })}), e => err("activity: " + e.code)));
+
+  /* the thread: legacy array messages (frozen on the doc) + one doc per new
+     message, merged oldest-first. ms is a client stamp used only for display
+     order - nothing security-relevant ranks on it. */
+  unsubDetail.push(fs.onSnapshot(fs.query(fs.collection(...base, "messages"), fs.orderBy("ms")),
+    snap => {
+      const evNow = findEvent(id); if(!evNow) return;
+      const streamed = snap.docs.map(d => msgFrom(d.data(), d.id));
+      STORE.setDetail(id, {
+        messages: (evNow.legacyMessages || []).concat(streamed),
+        msgTotal: (evNow.legacyMsgCount || 0) + snap.size
+      });
+    }, e => err("messages: " + e.code)));
+
+  /* host-only contact hints for pending rows - guests get permission-denied
+     here, which is correct and quiet */
+  unsubDetail.push(fs.onSnapshot(fs.collection(...base, "contacts"),
+    snap => {
+      const map = {};
+      snap.docs.forEach(d => {
+        const c = d.data();
+        if(c.name) map[c.name.toLowerCase()] = c.phone || "";
+      });
+      STORE.setDetail(id, { contactsMap: map });
+    }, e => dim("contacts: " + e.code)));
 }
 
 function mapGuest(g, id){
@@ -8254,38 +8266,32 @@ function mapGuest(g, id){
 
 function stopDetail(){ unsubDetail.forEach(u => { try{ u(); }catch(e){} }); unsubDetail = []; }
 
-/* chatMessages rides ON the event doc, which caps at 1 MB - keep the array
-   from ever getting near it. Best-effort, races only cost old messages. */
-async function trimChat(evRef){
-  try {
-    const { fs } = fb;
-    const snap = await fs.getDoc(evRef);
-    const msgs = (snap.data() || {}).chatMessages;
-    if(Array.isArray(msgs) && msgs.length > 420)
-      await fs.updateDoc(evRef, { chatMessages: msgs.slice(-400) });
-  } catch(e){}
-}
-
+/* One doc per message: the author's authUid ties it to them, the rules let
+   only the author edit and only the author or host delete, and no shared
+   1 MB array can fill up or race. chatTail + chatCount on the event doc keep
+   home-card previews and unread badges live without streaming the thread. */
 async function sendMessage(eventId, text){
   const { db, fs } = await initFirebase();
   const me = meIdent();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
-  const stamp = Date.now();   /* uniqueness for arrayUnion + the feed's handle
-                                 back to this message after edits/deletions */
-  await fs.updateDoc(evRef, {
-    chatMessages: fs.arrayUnion({
-      fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
-      text: text, at: new Date().toISOString(), isYou: true, ms: stamp
-    })
+  const stamp = Date.now();   /* display order + the feed's handle back here */
+  const at = new Date().toISOString();
+  await fs.setDoc(fs.doc(fs.collection(evRef, "messages")), {
+    fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
+    authUid: authUid(), text: text, at: at, ms: stamp, ts: fs.serverTimestamp()
   });
-  trimChat(evRef);
+  fs.updateDoc(evRef, {
+    chatCount: fs.increment(1),
+    chatTail: { fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
+                text: text, imageUrl: "", at: at, ms: stamp }
+  }).catch(() => {});
   logActivity(eventId, "chat",
     "“" + (text.length > 80 ? text.slice(0, 80) + "…" : text) + "”", false, { ms: stamp });
 }
 
 /* A picture message. The file lives under its own storage prefix (CHAT_ROOT),
-   apart from the event photo albums, and the message rides the same
-   chatMessages array with an imageUrl instead of text. */
+   apart from the event photo albums; the message is its own doc with an
+   imageUrl instead of text. */
 async function sendImage(eventId, file){
   const { db, storage, fs, st } = await initFirebase();
   if(!eventId) throw new Error("No event id.");
@@ -8304,14 +8310,17 @@ async function sendImage(eventId, file){
   const me = meIdent();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
   const stamp = Date.now();
-  await fs.updateDoc(evRef, {
-    chatMessages: fs.arrayUnion({
-      fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
-      text: "", imageUrl: url, imagePath: path,
-      at: new Date().toISOString(), isYou: true, ms: stamp
-    })
+  const at = new Date().toISOString();
+  await fs.setDoc(fs.doc(fs.collection(evRef, "messages")), {
+    fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
+    authUid: authUid(), text: "", imageUrl: url, imagePath: path,
+    at: at, ms: stamp, ts: fs.serverTimestamp()
   });
-  trimChat(evRef);
+  fs.updateDoc(evRef, {
+    chatCount: fs.increment(1),
+    chatTail: { fromUid: me.fsId || "", fromName: me.name, fromAvatarUrl: me.av,
+                text: "", imageUrl: url, at: at, ms: stamp }
+  }).catch(() => {});
   logActivity(eventId, "cam", "sent a photo in the chat", false, { ms: stamp });
   return { url, path };
 }
@@ -8321,10 +8330,10 @@ window.D2C = {
   requestJoin, suggestInvites, requestRemoval, approveRequest, declineRequest,
   uploadCover, deleteFile, createEvent, updateEvent, deleteEvent,
   deletePhoto, deleteMessage, editMessage,
-  saveProfile, findByPhone, setRsvp, setPlus, propagateProfile, announceGuest, renameLinked,
-  smsSend, smsCheck, smsAbort, smsReady: () => KEY_OK,
-  smsPending: () => smsConf ? smsTo : "",     // E.164 a code is out to, else ""
-  watchEvent(id){ watchingId = id; stopDetail(); watchDetail(id); },
+  saveProfile, pullProfile, watchMine, setRsvp, setPlus, propagateProfile, announceGuest,
+  smsSend, smsCheck, smsSwitch: () => doSwitch(null), smsAbort, smsReady: () => KEY_OK,
+  smsPending: () => smsVerifId ? smsTo : "",  // E.164 a code is out to, else ""
+  watchEvent(id){ watchingId = id; stopDetail(); ensureEvent(id); watchDetail(id); },
   unwatchEvent(){ watchingId = null; stopDetail(); },
   reconnect: connectLive
 };

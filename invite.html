@@ -6087,28 +6087,40 @@ function eventDock(id){
   /* a profile edit shows up everywhere this uid already appears - the host
      stamp, every guest list, the doc-riding chat, photos and the feed */
   function propagateMe(){
-    var m=loadMe(), av=meAvatar(), uids=myUids();
+    /* only a REAL chosen photo propagates - the letter tile is a render-time
+       stand-in, and writing it into rows/docs overwrote people's actual
+       photos with generated ones (live incident). av null = names only;
+       rows without a photo keep re-rolling their tile from the live name. */
+    var m=loadMe(), av=m.photo||'', uids=myUids();
     function row(g){
       if(!g || !g.uid || uids.indexOf(g.uid)<0) return;
-      g.name=m.name||g.name; if(g.uid===m.uid) g.avatarUrl=av;
+      g.name=m.name||g.name; if(av && g.uid===m.uid) g.avatarUrl=av;
     }
     STORE.events.forEach(function(ev){
-      if(uids.indexOf(ev.hostUid)>-1){ ev.hostName=m.name||ev.hostName; ev.hostAvatarUrl=av; }
+      if(uids.indexOf(ev.hostUid)>-1){
+        ev.hostName=m.name||ev.hostName;
+        if(av) ev.hostAvatarUrl=av;
+      }
       [ev.guestPreview,ev.guests,ev.maybes,ev.cants,ev.waiting,ev.requests]
         .forEach(function(l){ (l||[]).forEach(row); });
       (ev.messages||[]).forEach(function(msg){
         if(msg.fromUid && uids.indexOf(msg.fromUid)>-1){
-          msg.fromName=m.name||msg.fromName; if(msg.fromUid===m.uid) msg.fromAvatarUrl=av; } });
+          msg.fromName=m.name||msg.fromName;
+          if(av && msg.fromUid===m.uid) msg.fromAvatarUrl=av; } });
       (ev.photos||[]).forEach(function(p){
         if(p.byUid && uids.indexOf(p.byUid)>-1){
-          p.byName=m.name||p.byName; if(p.byUid===m.uid) p.byAvatarUrl=av; } });
+          p.byName=m.name||p.byName;
+          if(av && p.byUid===m.uid) p.byAvatarUrl=av; } });
       (ev.activity||[]).forEach(function(a){
         if(a.personUid && uids.indexOf(a.personUid)>-1){
-          a.personName=m.name||a.personName; if(a.personUid===m.uid) a.personAvatarUrl=av; } });
+          a.personName=m.name||a.personName;
+          if(av && a.personUid===m.uid) a.personAvatarUrl=av; } });
     });
-    if(STORE.mode==='live' && window.D2C && D2C.propagateProfile){
+    /* an empty name must never blank rows either - skip the push until the
+       profile has one (the post-heal second pass covers late arrivals) */
+    if(m.name && STORE.mode==='live' && window.D2C && D2C.propagateProfile){
       D2C.propagateProfile({ uid:m.uid, prevUids:(m.prevUids||[]).slice(),
-                             name:m.name, avatarUrl:av, rsvp:m.rsvp,
+                             name:m.name, avatarUrl:av||null, rsvp:m.rsvp,
                              ids:(m.events||[]).slice() })
         .catch(function(e){ console.warn('propagate failed', e); });
     }
@@ -8157,12 +8169,13 @@ async function doSwitch(cred, kind){
      asynchronously, so the first request after signInWithCredential can
      still go out with the old token and come back permission-denied. */
   try { await user.getIdToken(); } catch(e){}
-  let doc = null;
+  let doc = null, readOk = false;
   for(let t = 0; t < 5; t++){
     try {
       const snap = await fs.getDoc(fs.doc(db, ...FS_ROOT, "people", user.uid));
       if(snap.exists()) doc = snap.data();
-      break;                       /* the read ran as the new user */
+      readOk = true;               /* the read ran as the new user */
+      break;
     } catch(e){                    /* denied = old token still in play */
       await new Promise(r => setTimeout(r, 200 + 300 * t));
     }
@@ -8173,13 +8186,21 @@ async function doSwitch(cred, kind){
      displayName is usually null - the google.com providerData entry is
      where the real name and face live); the guest's event list unions in */
   if(window.hydrateProfile && doc) hydrateProfile(doc);
+  /* Google's own name/face are ONLY safe when the record read CONFIRMED
+     the account is fresh (readOk, no doc). After a raced/failed read they
+     must stay out of it - inventing an identity here overwrote the
+     account's real name and pushed a stand-in over its chosen photo; the
+     late pullProfile heal fills the blanks with the real values instead. */
   const gp = (user.providerData || []).filter(
     pd => pd && pd.providerId === "google.com")[0] || {};
+  const fresh = readOk && !doc;
   let name = "", photo = "";
   if(window.loadMe){
     const m2 = loadMe();
-    m2.name  = (doc && doc.name)  || m2.name  || user.displayName || gp.displayName || "";
-    m2.photo = (doc && doc.photo) || m2.photo || user.photoURL    || gp.photoURL    || "";
+    m2.name  = (doc && doc.name)  || m2.name  ||
+               (fresh ? (user.displayName || gp.displayName || "") : "");
+    m2.photo = (doc && doc.photo) || m2.photo ||
+               (fresh ? (user.photoURL    || gp.photoURL    || "") : "");
     name = m2.name; photo = m2.photo;
   }
   /* NOW adopt the identity - the save this fires carries the merged

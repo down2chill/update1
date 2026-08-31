@@ -5510,7 +5510,9 @@ function eventDock(id){
       (SW.kind==='google' ? D2C.googleSwitch() : D2C.smsSwitch()).then(function(res){
         closeModal();
         toast(res && res.name ? 'Welcome back, '+fname(res.name)+'!' : 'Signed into your account','top');
-        repaintMe(); remapRoles(); STORE.notify();
+        /* the account's name and face repaint locally AND push onto every
+           row, stamp, and message this identity holds - no RSVP needed */
+        propagateMe(); repaintMe(); remapRoles(); STORE.notify();
         afterAuthClaim();
       }).catch(function(e){
         if(SW.kind!=='google' && e && e.code==='auth/requires-recent-code'){
@@ -5554,7 +5556,7 @@ function eventDock(id){
         var gm=loadMe();
         if(res.name && !gm.name) gm.name=res.name;
         if(res.photo && !gm.photo) gm.photo=res.photo;
-        saveMe(); closeModal();
+        saveMe(); propagateMe(); closeModal();
         toast('Google connected'+(res.email?' as '+res.email:''),'top');
         repaintMe(); afterAuthClaim();
       }).catch(function(e){
@@ -6090,7 +6092,8 @@ function eventDock(id){
           a.personName=m.name||a.personName; if(a.personUid===m.uid) a.personAvatarUrl=av; } });
     });
     if(STORE.mode==='live' && window.D2C && D2C.propagateProfile){
-      D2C.propagateProfile({ uid:m.uid, name:m.name, avatarUrl:av, rsvp:m.rsvp,
+      D2C.propagateProfile({ uid:m.uid, prevUids:(m.prevUids||[]).slice(),
+                             name:m.name, avatarUrl:av, rsvp:m.rsvp,
                              ids:(m.events||[]).slice() })
         .catch(function(e){ console.warn('propagate failed', e); });
     }
@@ -7893,13 +7896,27 @@ async function pushIdentity(uid, name, av, ids, hostedDocs){
 }
 async function propagateProfile(p){
   const { db, fs } = await initFirebase();
-  const evs = await fs.getDocs(fs.query(
-    fs.collection(db, ...FS_ROOT, "events"), fs.where("hostUid", "==", p.uid)));
+  /* hosted events by AUTH uid - the only host list-shape the rules prove
+     (the old hostUid filter is unprovable under the locked list rule and
+     was silently denying the whole propagation) */
+  const uid = authUid();
+  let evs = { docs: [] };
+  if(uid){
+    try {
+      evs = await fs.getDocs(fs.query(
+        fs.collection(db, ...FS_ROOT, "events"), fs.where("hostAuthUid", "==", uid)));
+    } catch(e){}
+  }
   const ids = {}; evs.docs.forEach(d => { ids[d.id] = 1; });
   Object.keys(p.rsvp || {}).forEach(id => { ids[id] = 1; });
   (p.ids || []).forEach(id => { ids[id] = 1; });
-  const n = await pushIdentity(p.uid, p.name, p.avatarUrl, ids, evs.docs);
-  ok("profile propagated: " + n.evN + " event doc(s), " + n.rowN + " guest row(s)");
+  /* rows may still sit under uids I held before - patch those too */
+  let evN = 0, rowN = 0;
+  for(const u of [p.uid].concat(p.prevUids || [])){
+    const n = await pushIdentity(u, p.name, p.avatarUrl, ids, u === p.uid ? evs.docs : []);
+    evN += n.evN; rowN += n.rowN;
+  }
+  ok("profile propagated: " + evN + " event doc(s), " + rowN + " guest row(s)");
 }
 
 /* ---------------- RSVP ----------------
@@ -8098,33 +8115,47 @@ async function doSwitch(cred, kind){
   smsWantSwitch = false; smsSwitchCred = null; googSwitchCred = null;
   const user = credRes.user;
   fb.uid = user.uid;
+  /* READ the account's record BEFORE anything can write under its uid -
+     adoptAuthUid triggers a profile save, and doing that first merge-wrote
+     the guest's (often blank) name and photo over the account's own,
+     which then read back as "nothing to adopt" */
+  let doc = null;
+  try {
+    const snap = await fs.getDoc(fs.doc(db, ...FS_ROOT, "people", user.uid));
+    if(snap.exists()) doc = snap.data();
+  } catch(e){}
+  /* merge locally while ME still holds the old uid (cloud writes are
+     uid-guarded, so nothing lands upstream yet): the account's own name
+     and photo win; Google's fill any remaining blanks; the guest's event
+     list unions in */
+  if(window.hydrateProfile && doc) hydrateProfile(doc);
+  let name = "", photo = "";
+  if(window.loadMe){
+    const m2 = loadMe();
+    m2.name  = (doc && doc.name)  || m2.name  || user.displayName || "";
+    m2.photo = (doc && doc.photo) || m2.photo || user.photoURL    || "";
+    name = m2.name; photo = m2.photo;
+  }
+  /* NOW adopt the identity - the save this fires carries the merged
+     profile, so the account record keeps its own name */
   if(window.adoptAuthUid)
     adoptAuthUid(user.uid, user.phoneNumber || "",
                  (user.emailVerified && user.email) || "");
-  /* re-home the lifted guest rows under the account's uid */
+  if(window.saveMe) saveMe();
+  /* re-home the lifted guest rows under the account's uid, already wearing
+     the account's name and face so other viewers never see the stale ones */
+  const dress = {};
+  if(name)  dress.name = name;
+  if(photo) dress.avatarUrl = photo;
   await Promise.all(rows.map(r =>
     fs.setDoc(fs.doc(db, ...FS_ROOT, "events", r.id, "guests", user.uid),
-      Object.assign({}, r.data, { uid: user.uid, authUid: user.uid }), { merge: true })
-      .catch(() => {})));
-  /* hosted events follow - the phone claim on the token opens their
-     hostPhone door, so this update is authorized */
+      Object.assign({}, r.data, { uid: user.uid, authUid: user.uid }, dress),
+      { merge: true }).catch(() => {})));
+  /* hosted events follow - the claim on the token opens their door
+     (hostPhone or hostEmail), so this update is authorized */
   await Promise.all(hosted.map(id =>
     fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", id),
       { hostAuthUid: user.uid, hostUid: user.uid }).catch(() => {})));
-  /* the account's own name and photo win - joining it must not rewrite it */
-  let name = "";
-  try {
-    const snap = await fs.getDoc(fs.doc(db, ...FS_ROOT, "people", user.uid));
-    if(snap.exists() && window.hydrateProfile){
-      const doc = snap.data();
-      hydrateProfile(doc);
-      const m2 = loadMe();
-      if(doc.name)  m2.name  = doc.name;
-      if(doc.photo) m2.photo = doc.photo;
-      name = m2.name || "";
-      if(window.saveMe) saveMe();
-    }
-  } catch(e){}
   connectLive();   /* re-stream under the new principal */
   return { name: name };
 }

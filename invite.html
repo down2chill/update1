@@ -6035,6 +6035,12 @@ function eventDock(id){
       /* the account's name may still be syncing in (auth-race heal) - give
          it a few seconds before falling back to asking again */
       if(!m.name && tries++<10){ setTimeout(fin, 500); return; }
+      /* the account may ALREADY belong to this event - often exactly why
+         the person signed in. Keep its existing answer and just show it;
+         replaying the guest's pre-sign-in tap here stomped the real RSVP */
+      if(myRsvp(c.id) || m.claims[c.id] || (ev.slug && m.claims[ev.slug]) || amJoined(ev)){
+        pendingRsvp=null; remapRoles(); STORE.notify(); repaintMe(); return;
+      }
       pendingRsvp=c.pr||null;
       if(m.name) doClaim(m.name, true, '');
       else {
@@ -7845,6 +7851,22 @@ async function wipeGuestContent(evRef, fs, uid){
 async function announceGuest(eventId, claimOf){
   const { db, fs } = await initFirebase();
   const me = meIdent();
+  const ref = fs.doc(db, ...FS_ROOT, "events", eventId, "guests", me.fsId || "anon");
+  /* an account arriving on a new device may already HAVE an answer on this
+     event - announcing must never downgrade it to pending. Adopt the row's
+     answer into the local cache instead, so the page shows current state. */
+  try {
+    const cur = await fs.getDoc(ref);
+    const st = cur.exists() ? (cur.data().status || "") : "";
+    if(/^(going|maybe|cant)$/.test(st)){
+      if(window.loadMe){
+        const m = loadMe();
+        if(!m.rsvp[eventId]){ m.rsvp[eventId] = st; saveMe(); }
+      }
+      if(window.STORE) STORE.notify();
+      return;
+    }
+  } catch(e){}
   const row = {
     uid: me.fsId, name: me.name, avatarUrl: me.av, message: "",
     invitedLabel: "Viewing this event", isHost: false, isYou: false,
@@ -7853,8 +7875,7 @@ async function announceGuest(eventId, claimOf){
   /* which curated spot this visitor claimed - the row-level key that lets
      two guests share a full name without colliding */
   if(claimOf) row.claimOf = claimOf;
-  await fs.setDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "guests", me.fsId || "anon"),
-    row, { merge: true });
+  await fs.setDoc(ref, row, { merge: true });
   logActivity(eventId, "person", "joined the guest list");
 }
 
@@ -8446,9 +8467,22 @@ async function watchDetail(id){
         .reduce((best, v) => (!best || rank(v) > rank(best)) ? v : best, null);
       const cloudP = mineRaw ? (+mineRaw.plus || 0) : 0;
       const tapped = window.PLUS_TAP && (Date.now() - (PLUS_TAP[id] || 0)) < 8000;
+      let dirty = false;
       if(!tapped && (+((m.plus || {})[id]) || 0) !== cloudP){
-        m.plus[id] = cloudP;
-        try{ localStorage.setItem("d2c.me.v1", JSON.stringify(m)); }catch(e){}
+        m.plus[id] = cloudP; dirty = true;
+      }
+      /* my own row's ANSWER is server truth too: a device that just signed
+         into this account adopts it, so the page shows the current RSVP
+         instead of treating me as new here */
+      const mineSt = snap.docs.map(d => d.data()).filter(v =>
+        v.uid && uids.indexOf(v.uid) > -1 &&
+        /^(going|maybe|cant)$/.test(v.status || ""))[0];
+      if(mineSt && !m.rsvp[id]){
+        m.rsvp[id] = mineSt.status; dirty = true;
+        if(m.events.indexOf(id) < 0) m.events.push(id);
+      }
+      if(dirty){
+        try{ localStorage.setItem("d2c.me.v2", JSON.stringify(m)); }catch(e){}
         STORE.notify();
       }
     } catch(e){}

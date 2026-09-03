@@ -2157,6 +2157,9 @@ function docToModel(id, d){
     role: (d.hostUid && myUids().indexOf(d.hostUid) > -1) ? "hosting" : "invited",
     coverUrl: d.coverUrl || "", thumbUrl: d.thumbUrl || d.coverUrl || "", mapUrl: d.mapUrl || "",
     hostUid: d.hostUid || "", hostName: d.hostName || "Host", hostAvatarUrl: d.hostAvatarUrl || "",
+    /* '' = written before host stamps existed; the host's own device claims
+       it on open (stampHost) so the rules start proving their powers */
+    hostAuthUid: d.hostAuthUid || "",
     counts: { going: c.going||0, maybe: c.maybe||0, cant: c.cant||0, pending: c.pending||0,
               plus: c.plus||0 },
     guestPreview: d.guestPreview || [],
@@ -3631,7 +3634,7 @@ var JOIN_OPTS = [
   { k:'guests',  ic:'user-plus', t:'Guests Can Invite',     lab:'Guests can invite',
     s:'Guests join by claiming an invited name and can invite more people. Someone not on the list can ask you to join.' },
   { k:'private', ic:'lock',      t:'Private',               lab:'Private',
-    s:'Only names you approve get in - guests’ invites and join requests come to you first.' }
+    s:'Anyone with the link can still see the event; only names you approve get on the guest list - guests’ invites and join requests come to you first.' }
 ];
 function joinOpt(k){
   for(var i = 0; i < JOIN_OPTS.length; i++) if(JOIN_OPTS[i].k === k) return JOIN_OPTS[i];
@@ -3793,15 +3796,15 @@ function cardJoin(d){
       JOIN_OPTS.map(function(o){ return o.lab; })));
 }
 function cardPost(d){
-  return secCard('post','cam','Who Can Post', postOpt(d.post).lab,
-    '<div class="opts" role="radiogroup" aria-label="Who Can Post">' +
+  return secCard('post','cam','Who Can Post Pictures', postOpt(d.post).lab,
+    '<div class="opts" role="radiogroup" aria-label="Who Can Post Pictures">' +
       POST_OPTS.map(function(o){
         return optRow('post', o.k, (d.post || 'guests') === o.k, o.t, o.s, o.ic);
       }).join('') +
     '</div>' +
     '<p class="onote">Covers event photos and chat pictures. Chat messages follow Who Can Join, ' +
       'and you can always remove anything a guest posts.</p>',
-    quickSel('post','Who Can Post', postOpt(d.post).lab,
+    quickSel('post','Who Can Post Pictures', postOpt(d.post).lab,
       POST_OPTS.map(function(o){ return o.lab; })));
 }
 function cardPlus(d){
@@ -6815,10 +6818,14 @@ function eventDock(id){
     if(!m) return;
     if(anchor===bub){ closeMenu(); return; }
     closeMenu();
+    /* a pre-migration message lives in the event doc's array, which the
+       rules no longer let members rewrite (it holds everyone's words) -
+       only the host can still change or remove those */
+    var frozen = STORE.mode==='live' && !m.id && ev.role!=='hosting';
     menu.innerHTML =
       mItem('mcopy','copy', m.text ? 'Copy message' : 'Copy image link')+
-      (m.isYou && m.text ? mItem('medit','pen','Edit message') : '')+
-      (ev.role==='hosting' || m.isYou ? mItem('mdelete','trash','Delete message',1) : '');
+      (m.isYou && m.text && !frozen ? mItem('medit','pen','Edit message') : '')+
+      ((ev.role==='hosting' || m.isYou) && !frozen ? mItem('mdelete','trash','Delete message',1) : '');
     menuMsg={ id: ev.id, idx: idx };
     anchor=bub; bub.setAttribute('aria-expanded','true');
     placeMenu(bub);
@@ -7186,8 +7193,11 @@ const SDK = "https://www.gstatic.com/firebasejs/12.3.0/";
 /* Namespacing - this bucket/database already hold other data, so everything
    this app writes lives under one prefix and nothing else is touched.
      Firestore : apps/down2chill/{events,people}/...
-     Storage   : down2chill/events/{eventId}/photos/...  (event albums)
-                 down2chill/chat/{eventId}/...           (chat pictures)   */
+     Storage   : down2chill/events/{eventId}/photos/{uid}/...  (albums)
+                 down2chill/chat/{eventId}/{uid}/...           (chat pictures)
+                 down2chill/covers/{uid}/...                   (covers)
+   Every file sits under its uploader's auth uid: the Storage rules let
+   that uid (or the event's host) delete it and nobody list a folder.    */
 const FS_ROOT    = ["apps", "down2chill"];
 const PHOTO_ROOT = "down2chill/events";
 const COVER_ROOT = "down2chill/covers";
@@ -7309,7 +7319,7 @@ async function uploadPhoto(evId, file, say, noLog){
 
   file = await downscale(file, 1600);
   const safe = (file.name || "photo.jpg").replace(/[^\w.\-]+/g, "_");
-  const path = PHOTO_ROOT + "/" + evId + "/photos/" + Date.now() + "_" + safe;
+  const path = PHOTO_ROOT + "/" + evId + "/photos/" + ownerSeg() + "/" + Date.now() + "_" + safe;
   say("uploading " + (file.size / 1024).toFixed(0) + " KB to " + path);
 
   const ref  = st.ref(storage, path);
@@ -7388,6 +7398,13 @@ async function downscale(file, max){
 }
 /* the writer's auth uid - rules use it to tie rows to their author */
 function authUid(){ return (fb && fb.auth.currentUser && fb.auth.currentUser.uid) || ""; }
+/* the owner segment of a Storage path - the rules key delete rights off it,
+   so an upload without a signed-in uid has nowhere it may land */
+function ownerSeg(){
+  const u = authUid();
+  if(!u) throw new Error("Not signed in yet - reload once and try again.");
+  return u;
+}
 
 /* Cover photos live beside the event photos but in their own prefix, so a
    cover picked before the event exists still has somewhere to go.          */
@@ -7400,7 +7417,7 @@ async function uploadCover(file, onProgress){
   file = await downscale(file, 1600);
 
   const safe = (file.name || "cover.jpg").replace(/[^\w.\-]+/g, "_");
-  const path = COVER_ROOT + "/" + Date.now() + "_" + safe;
+  const path = COVER_ROOT + "/" + ownerSeg() + "/" + Date.now() + "_" + safe;
   const ref  = st.ref(storage, path);
 
   if(st.uploadBytesResumable){
@@ -7458,7 +7475,7 @@ async function createEvent(draft){
     fs.setDoc(fs.doc(fs.collection(evRef, "guests")), {
       uid: g.uid, name: g.name, avatarUrl: g.avatarUrl, message: "",
       invitedLabel: "Just now", isHost: false, isYou: false, status: "pending",
-      order: Date.now() + i + 1, source: g.source
+      authUid: authUid(), order: Date.now() + i + 1, source: g.source
     })));
   await Promise.all(invited.filter(g => g.phone).map(g =>
     fs.setDoc(fs.doc(fs.collection(evRef, "contacts")), {
@@ -7467,7 +7484,7 @@ async function createEvent(draft){
     }).catch(() => {})));   /* best-effort: a refused hint never fails the event */
   await fs.setDoc(fs.doc(fs.collection(evRef, "activity")), {
     personUid: me.fsId || "", personName: me.name, personAvatarUrl: me.av,
-    icon: "check", isCheck: true,
+    authUid: authUid(), icon: "check", isCheck: true,
     text: "created this event", whenLabel: "Just now",
     at: new Date().toISOString(),
     order: Date.now(), source: "created"
@@ -7478,8 +7495,10 @@ async function createEvent(draft){
 }
 
 /* ---------------- content moderation ----------------
-   Rules let the photo's author or the event host delete; chat lives on the
-   event doc, whose chatMessages field every signed-in client may rewrite. */
+   Rules let the photo's author or the event host delete a photo, and the
+   author or host delete a message doc. Pre-migration messages still ride
+   the event doc's chatMessages array, which only the host may rewrite now
+   (the UI hides edit/delete on those for everyone else). */
 async function deletePhoto(eventId, photoId, path){
   const { db, fs } = await initFirebase();
   await fs.deleteDoc(fs.doc(db, ...FS_ROOT, "events", eventId, "photos", photoId));
@@ -7552,35 +7571,39 @@ async function deleteFile(path){
 
 async function updateEvent(id, patch){
   const { db, fs } = await initFirebase();
+  if(window.findEvent) await claimIfMine(findEvent(id));
   patch = Object.assign({}, patch, { updatedAt: fs.serverTimestamp() });
   await fs.updateDoc(fs.doc(db, ...FS_ROOT, "events", id), patch);
   logActivity(id, "pen", "updated the event details");
   ok("event updated: " + FS_ROOT.join("/") + "/events/" + id);
 }
 
-/* Firestore does not cascade, so the subcollections go first. */
+/* Nothing cascades. Storage goes FIRST: its rules prove host rights by
+   reading this very event document, so the album and chat folders must be
+   wiped while the doc still exists. Then the subcollections, then the doc. */
 async function deleteEvent(id){
   const { db, storage, fs, st } = await initFirebase();
   const evRef = fs.doc(db, ...FS_ROOT, "events", id);
+  await stampHost(evRef, fs);   /* a pre-stamp event must be claimed first */
 
   let cover = "";
   try { const snap = await fs.getDoc(evRef); cover = (snap.data() || {}).coverPath || ""; }
   catch(e){ /* the doc may already be gone */ }
+
+  await wipeFolder(PHOTO_ROOT + "/" + id);
+  await wipeFolder(CHAT_ROOT + "/" + id);
+  if(cover){
+    /* covers sit under their uploader's uid - a host who since switched
+       accounts leaves an orphan file, which is harmless (never listable) */
+    try { await st.deleteObject(st.ref(storage, cover)); }
+    catch(e){ warn("cover not removed (" + (e.code || e.message) + ")"); }
+  }
 
   for(const sub of ["guests", "photos", "activity", "messages", "contacts"]){
     const snap = await fs.getDocs(fs.collection(evRef, sub));
     await Promise.all(snap.docs.map(d => fs.deleteDoc(d.ref)));
   }
   await fs.deleteDoc(evRef);
-
-  /* Storage doesn't cascade either - the event's album and chat pictures */
-  await wipeFolder(PHOTO_ROOT + "/" + id);
-  await wipeFolder(CHAT_ROOT + "/" + id);
-
-  if(cover){
-    try { await st.deleteObject(st.ref(storage, cover)); }
-    catch(e){ warn("cover not removed (" + (e.code || e.message) + ")"); }
-  }
   ok("event deleted: " + FS_ROOT.join("/") + "/events/" + id);
 }
 
@@ -7624,7 +7647,7 @@ async function logActivity(eventId, icon, text, isCheck, extra){
     const me = meIdent();
     await fs.setDoc(fs.doc(fs.collection(db, ...FS_ROOT, "events", eventId, "activity")), Object.assign({
       eventUid: eventId, personUid: me.fsId || "", personName: me.name || "Guest",
-      personAvatarUrl: me.av, icon: icon, isCheck: !!isCheck, text: text,
+      personAvatarUrl: me.av, authUid: authUid(), icon: icon, isCheck: !!isCheck, text: text,
       whenLabel: "", at: new Date().toISOString(), order: Date.now(), source: "app"
     }, extra || {}));
   } catch(e){ console.warn("activity not logged:", e && e.message); }
@@ -7750,11 +7773,25 @@ async function stampHost(evRef, fs){
   const uid = authUid(); if(!uid) return;
   try {
     const d = (await fs.getDoc(evRef)).data() || {};
-    if(!d.hostAuthUid) await fs.updateDoc(evRef, {
+    if(d.hostAuthUid) return;
+    const cu = fb.auth.currentUser;
+    /* exactly the three keys the rules' claim clause admits, each one the
+       token's own claim (or blank) */
+    await fs.updateDoc(evRef, {
       hostAuthUid: uid,
-      hostPhone: d.hostPhone || (fb.auth.currentUser && fb.auth.currentUser.phoneNumber) || ""
+      hostPhone: d.hostPhone || (cu && cu.phoneNumber) || "",
+      hostEmail: d.hostEmail || (cu && cu.emailVerified && cu.email) || ""
     });
   } catch(e){ /* someone else's event */ }
+}
+/* claim a pre-stamp event the moment its host opens it, once per session -
+   until then the rules can't prove host rights for any write on it */
+const STAMPED = {};
+function claimIfMine(ev){
+  if(!fb || !ev || ev.role !== "hosting" || ev.hostAuthUid) return Promise.resolve();
+  if(!STAMPED[ev.id])
+    STAMPED[ev.id] = stampHost(fb.fs.doc(fb.db, ...FS_ROOT, "events", ev.id), fb.fs).catch(() => {});
+  return STAMPED[ev.id];
 }
 
 /* ---------------- the host removes a person ----------------
@@ -8016,11 +8053,28 @@ async function setRsvp(eventId, status, prev, wasReq){
 async function absorbPending(eventId, name, keepId){
   const { db, fs } = await initFirebase();
   const evRef = fs.doc(db, ...FS_ROOT, "events", eventId);
-  const snap = await fs.getDocs(fs.query(fs.collection(evRef, "guests"),
-    fs.where("status", "==", "pending"), fs.where("name", "==", name)));
-  const dead = snap.docs.filter(d => d.id !== keepId && !d.data().uid);
-  await Promise.all(dead.map(d => fs.deleteDoc(d.ref)));
-  if(dead.length) await fs.updateDoc(evRef, { "counts.pending": fs.increment(-dead.length) });
+  const gcol  = fs.collection(evRef, "guests");
+  /* the claimed spot is known by id (claimOf): take exactly that row. The
+     name sweep serves only claims made before claimOf existed. The rules
+     mirror this - a member may clear the one curated row their own row
+     points at (or, claim-less, a same-named uid-less row), never a
+     same-named second invitee's spot. */
+  const claimOf = (window.loadMe && (loadMe().claimRow || {})[eventId]) || "";
+  let docs = [];
+  if(claimOf){
+    const one = await fs.getDoc(fs.doc(gcol, claimOf)).catch(() => null);
+    if(one && one.exists()) docs = [one];
+  } else {
+    const snap = await fs.getDocs(fs.query(gcol,
+      fs.where("status", "==", "pending"), fs.where("name", "==", name)));
+    docs = snap.docs;
+  }
+  const dead = docs.filter(d => d.id !== keepId && !d.data().uid &&
+                                (d.data().status || "") === "pending");
+  /* settle one by one - a refused row must not strand the counter */
+  const gone = (await Promise.all(dead.map(d =>
+    fs.deleteDoc(d.ref).then(() => 1, () => 0)))).reduce((a, b) => a + b, 0);
+  if(gone) await fs.updateDoc(evRef, { "counts.pending": fs.increment(-gone) });
 }
 
 /* ---------------- 6. the profile record ----------------
@@ -8037,6 +8091,9 @@ async function saveProfile(p){
      device saving before it has hydrated carries empty fields, and letting
      those land wiped the account's own name/photo (live incident) */
   ["name", "photo", "phone"].forEach(k => { if(!clean[k]) delete clean[k]; });
+  /* merge replaces ARRAYS wholesale (maps merge key by key), so an empty
+     list must not land either - it would erase the account's own events */
+  ["events", "prevUids"].forEach(k => { if(!(clean[k] && clean[k].length)) delete clean[k]; });
   await fs.setDoc(fs.doc(db, ...FS_ROOT, "people", uid), clean, { merge: true });
 }
 
@@ -8437,6 +8494,7 @@ async function watchDetail(id){
 
   const { db, fs } = await initFirebase();
   const base = [db, ...FS_ROOT, "events", ev.id];
+  claimIfMine(ev);
 
   unsubDetail.push(fs.onSnapshot(fs.collection(...base, "guests"), snap => {
     const all = snap.docs.map(d => mapGuest(d.data(), d.id));
@@ -8608,7 +8666,7 @@ async function sendImage(eventId, file){
 
   file = await downscale(file, 1600);
   const safe = (file.name || "chat.jpg").replace(/[^\w.\-]+/g, "_");
-  const path = CHAT_ROOT + "/" + eventId + "/" + Date.now() + "_" + safe;
+  const path = CHAT_ROOT + "/" + eventId + "/" + ownerSeg() + "/" + Date.now() + "_" + safe;
   const ref  = st.ref(storage, path);
   await st.uploadBytes(ref, file, { contentType: file.type });
   const url  = await st.getDownloadURL(ref);
